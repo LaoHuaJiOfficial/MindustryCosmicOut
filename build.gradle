@@ -43,6 +43,11 @@ ext{
     mindustryVersion = "v158.1"
     isWindows = System.getProperty("os.name").toLowerCase().contains("windows")
     sdkRoot = System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
+
+    mindustryJar = "E:/project/MindustryModDevLib/Mindustry8.0.jar"
+    steamModsDir = "E:/Steam/steamapps/common/Mindustry/saves/mods"
+    appDataModsDir = "${System.getenv('APPDATA')}/Mindustry/mods"
+    modDeployName = "CosmicOutJar.jar"
 }
 
 dependencies{
@@ -100,4 +105,40 @@ tasks.register('deploy', Jar){
             delete "build/libs/${projectName}Android.jar"
         }
     }
+}
+
+//paths are hardcoded
+tasks.register('copyTo') {
+    dependsOn jar
+
+    doLast {
+        [steamModsDir, appDataModsDir].each { dest ->
+            copy {
+                from jar.archiveFile
+                into dest
+                rename { modDeployName }
+            }
+        }
+    }
+}
+
+tasks.register('debugMobile', JavaExec) {
+    dependsOn 'copyTo'
+
+    classpath = files(mindustryJar)
+    mainClass = 'mindustry.desktop.DesktopLauncher'
+    args = [
+            //"-debug",
+            "-testMobile"
+    ]
+}
+
+tasks.register('debugDesktop', JavaExec) {
+    dependsOn 'copyTo'
+
+    classpath = files(mindustryJar)
+    mainClass = 'mindustry.desktop.DesktopLauncher'
+    args = [
+            //"-debug",
+    ]
 }
