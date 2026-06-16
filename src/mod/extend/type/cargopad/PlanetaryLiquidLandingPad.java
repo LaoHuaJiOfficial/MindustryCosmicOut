@@ -2,7 +2,6 @@ package mod.extend.type.cargopad;
 
 import arc.Core;
 import arc.Events;
-import arc.math.Mathf;
 import arc.scene.ui.layout.Table;
 import arc.struct.ObjectMap;
 import arc.struct.Seq;
@@ -11,20 +10,17 @@ import arc.util.io.Reads;
 import arc.util.io.Writes;
 import mindustry.gen.Building;
 import mindustry.gen.Call;
-import mindustry.graphics.Pal;
 import mindustry.io.TypeIO;
 import mindustry.type.Liquid;
 import mindustry.type.Planet;
-import mindustry.type.Sector;
-import mindustry.ui.Styles;
 import mindustry.world.blocks.ItemSelection;
-import mod.extend.sector.SectorLogistics;
-import mod.extend.sector.SectorLogisticsData;
+import mod.extend.sector.PlanetLogistics;
+import mod.extend.sector.PlanetLogisticsData;
 
 import static mindustry.Vars.*;
 
-public class LiquidCargoLandingPad extends CargoLandingPad {
-    static ObjectMap<Liquid, Seq<LiquidCargoLandingPadBuild>> waiting = new ObjectMap<>();
+public class PlanetaryLiquidLandingPad extends CargoLandingPad {
+    static ObjectMap<Liquid, Seq<PlanetaryLiquidLandingPadBuild>> waiting = new ObjectMap<>();
     static long lastUpdateId = -1;
 
     static {
@@ -36,18 +32,18 @@ public class LiquidCargoLandingPad extends CargoLandingPad {
 
     public float landingVolume = 100f;
 
-    public LiquidCargoLandingPad(String name) {
+    public PlanetaryLiquidLandingPad(String name) {
         super(name);
         hasItems = false;
         hasLiquids = true;
         acceptsItems = false;
 
-        config(Liquid.class, (LiquidCargoLandingPadBuild build, Liquid liquid) -> {
+        config(Liquid.class, (PlanetaryLiquidLandingPadBuild build, Liquid liquid) -> {
             if (!build.accessible() || liquid == null || !liquid.isOnPlanet(state.getPlanet())) return;
             build.liquidConfig = liquid;
         });
 
-        configClear((LiquidCargoLandingPadBuild build) -> {
+        configClear((PlanetaryLiquidLandingPadBuild build) -> {
             if (!build.accessible()) return;
             build.liquidConfig = null;
         });
@@ -57,11 +53,10 @@ public class LiquidCargoLandingPad extends CargoLandingPad {
     public void setBars() {
         super.setBars();
         removeBar("items");
-        addLiquidBar((LiquidCargoLandingPadBuild build) -> build.liquidConfig);
+        addLiquidBar((PlanetaryLiquidLandingPadBuild build) -> build.liquidConfig);
     }
 
-
-    public class LiquidCargoLandingPadBuild extends CargoLandingPadBuild {
+    public class PlanetaryLiquidLandingPadBuild extends CargoLandingPadBuild {
         public @Nullable Liquid liquidConfig;
 
         @Override
@@ -84,7 +79,7 @@ public class LiquidCargoLandingPad extends CargoLandingPad {
             if (state.isCampaign() && lastUpdateId != state.updateId) {
                 lastUpdateId = state.updateId;
 
-                logistics().syncLiquidImportTimers(state.getPlanet(), state.getSector(), landingVolume);
+                logistics().syncLiquidImportTimers(state.getPlanet(), landingVolume);
 
                 waiting.each((liquid, pads) -> {
                     pads.removeAll(l -> l.liquidConfig != liquid);
@@ -119,7 +114,7 @@ public class LiquidCargoLandingPad extends CargoLandingPad {
                     finishArrivalEffects();
                     liquids.add(arrivingLiquid, landingVolume);
                     if (!isFake()) {
-                        SectorLogistics.handleLiquidImport(state.getSector(), arrivingLiquid, landingVolume);
+                        PlanetLogistics.handleLiquidImport(state.getPlanet(), arrivingLiquid, landingVolume);
                     }
                     arrivingLiquid = null;
                     arrivingTimer = 0f;
@@ -133,16 +128,16 @@ public class LiquidCargoLandingPad extends CargoLandingPad {
             updateCooldown();
 
             if (liquidConfig != null && (isFake() || (state.isCampaign() && !legacyDisabled()))) {
-                SectorLogisticsData data = logistics();
+                PlanetLogisticsData data = logistics();
                 float stored = liquids.get(liquidConfig);
                 boolean hasRoom = stored <= liquidCapacity - landingVolume + 0.001f;
                 if (cooldown <= 0f && efficiency > 0f && hasRoom && !isLanding()
-                        && (isFake() || (data.getLiquidImportRate(state.getPlanet(), state.getSector(), liquidConfig) > 0f
+                        && (isFake() || (data.getLiquidImportRate(state.getPlanet(), liquidConfig) > 0f
                         && data.liquidImportTimer(liquidConfig) >= 1f))) {
                     if (isFake()) {
                         Call.landingPadLanded(tile);
                     } else {
-                        Seq<LiquidCargoLandingPadBuild> pads = waiting.get(liquidConfig, () -> new Seq<>(false));
+                        Seq<PlanetaryLiquidLandingPadBuild> pads = waiting.get(liquidConfig, () -> new Seq<>(false));
                         if (!pads.contains(this)) pads.add(this);
                     }
                 }
@@ -151,7 +146,7 @@ public class LiquidCargoLandingPad extends CargoLandingPad {
 
         @Override
         public void buildConfiguration(Table table) {
-            ItemSelection.buildTable(LiquidCargoLandingPad.this, table, content.liquids(), () -> liquidConfig, this::configure);
+            ItemSelection.buildTable(PlanetaryLiquidLandingPad.this, table, content.liquids(), () -> liquidConfig, this::configure);
         }
 
         @Override
@@ -166,13 +161,13 @@ public class LiquidCargoLandingPad extends CargoLandingPad {
                 int sources = 0;
                 float perSecond = 0f;
                 for (Planet planet : content.planets()) {
-                    for (Sector other : planet.sectors) {
-                        if (other == state.getSector() || !other.hasBase() || other.info.destination != state.getSector()) continue;
-                        float amount = SectorLogistics.get(other).getLiquidExport(liquidConfig);
-                        if (amount <= 0f) continue;
-                        sources++;
-                        perSecond += amount;
-                    }
+                    if (planet == state.getPlanet() || !PlanetLogistics.hasBase(planet)) continue;
+                    PlanetLogisticsData otherData = PlanetLogistics.get(planet);
+                    if (otherData.destinationPlanet() != state.getPlanet()) continue;
+                    float amount = otherData.getLiquidExport(liquidConfig);
+                    if (amount <= 0f) continue;
+                    sources++;
+                    perSecond += amount;
                 }
 
                 String str = Core.bundle.format("landing.sources", sources == 0 ? Core.bundle.get("none") : sources);

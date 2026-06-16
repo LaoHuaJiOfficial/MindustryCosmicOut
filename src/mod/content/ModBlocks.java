@@ -7,6 +7,7 @@ import mindustry.type.ItemStack;
 import mindustry.world.Block;
 import mindustry.world.meta.BuildVisibility;
 import mod.extend.type.cargopad.*;
+import mod.extend.type.sectorpad.*;
 import mod.extend.type.spaceship.ShipCargo;
 import mod.extend.type.spaceship.ShipCore;
 import mod.extend.type.spaceship.ShipEngine;
@@ -17,9 +18,11 @@ public class ModBlocks {
     public static Block
             basicShipyard, shipCore, shipHull, shipEngine, shipCargo,
             itemCargoLaunchPad, liquidCargoLaunchPad, payloadCargoLaunchPad,
-            itemCargoLandingPad, liquidCargoLandingPad, payloadCargoLandingPad;
+            itemCargoLandingPad, liquidCargoLandingPad, payloadCargoLandingPad,
+            liquidLaunchPad, liquidLandingPad, payloadLaunchPad, payloadLandingPad;
 
     public static void load() {
+        /*
         basicShipyard = new Shipyard("basic-shipyard") {{
             requirements(Category.effect, BuildVisibility.shown, ItemStack.with());
             size = 3;
@@ -52,14 +55,16 @@ public class ModBlocks {
             alwaysUnlocked = true;
         }};
 
-        itemCargoLaunchPad = new ItemCargoLaunchPad("item-cargo-launch-pad") {{
+         */
+
+        itemCargoLaunchPad = new PlanetaryItemLaunchPad("item-cargo-launch-pad") {{
             requirements(Category.effect, BuildVisibility.shown, ItemStack.with());
             size = 4;
             itemCapacity = 100;
             alwaysUnlocked = true;
         }};
 
-        liquidCargoLaunchPad = new LiquidCargoLaunchPad("liquid-cargo-launch-pad") {{
+        liquidCargoLaunchPad = new PlanetaryLiquidLaunchPad("liquid-cargo-launch-pad") {{
             requirements(Category.effect, BuildVisibility.shown, ItemStack.with());
             size = 4;
             liquidCapacity = 1200f;
@@ -67,14 +72,14 @@ public class ModBlocks {
             alwaysUnlocked = true;
         }};
 
-        payloadCargoLaunchPad = new PayloadCargoLaunchPad("payload-cargo-launch-pad") {{
+        payloadCargoLaunchPad = new PlanetaryPayloadLaunchPad("payload-cargo-launch-pad") {{
             requirements(Category.effect, BuildVisibility.shown, ItemStack.with());
             size = 4;
             stackCapacity = 16;
             alwaysUnlocked = true;
         }};
 
-        itemCargoLandingPad = new ItemCargoLandingPad("item-cargo-landing-pad") {{
+        itemCargoLandingPad = new PlanetaryItemLandingPad("item-cargo-landing-pad") {{
             requirements(Category.effect, BuildVisibility.shown, ItemStack.with());
             size = 4;
             itemCapacity = 100;
@@ -83,7 +88,7 @@ public class ModBlocks {
             alwaysUnlocked = true;
         }};
 
-        liquidCargoLandingPad = new LiquidCargoLandingPad("liquid-cargo-landing-pad") {{
+        liquidCargoLandingPad = new PlanetaryLiquidLandingPad("liquid-cargo-landing-pad") {{
             requirements(Category.effect, BuildVisibility.shown, ItemStack.with());
             size = 4;
             liquidCapacity = 1200f;
@@ -93,7 +98,42 @@ public class ModBlocks {
             alwaysUnlocked = true;
         }};
 
-        payloadCargoLandingPad = new PayloadCargoLandingPad("payload-cargo-landing-pad") {{
+        payloadCargoLandingPad = new PlanetaryPayloadLandingPad("payload-cargo-landing-pad") {{
+            requirements(Category.effect, BuildVisibility.shown, ItemStack.with());
+            size = 4;
+            stackCapacity = 16;
+            landingBatch = 1;
+            consumeLiquid = Liquids.water;
+            consumeLiquidAmount = 100f;
+            alwaysUnlocked = true;
+        }};
+
+        liquidLaunchPad = new LiquidLaunchPad("liquid-launch-pad") {{
+            requirements(Category.effect, BuildVisibility.shown, ItemStack.with());
+            size = 4;
+            liquidCapacity = 1200f;
+            launchVolume = 1000f;
+            alwaysUnlocked = true;
+        }};
+
+        liquidLandingPad = new LiquidLandingPad("liquid-landing-pad") {{
+            requirements(Category.effect, BuildVisibility.shown, ItemStack.with());
+            size = 4;
+            liquidCapacity = 1200f;
+            landingVolume = 1000f;
+            consumeLiquid = Liquids.water;
+            consumeLiquidAmount = 100f;
+            alwaysUnlocked = true;
+        }};
+
+        payloadLaunchPad = new PayloadLaunchPad("payload-launch-pad") {{
+            requirements(Category.effect, BuildVisibility.shown, ItemStack.with());
+            size = 4;
+            stackCapacity = 16;
+            alwaysUnlocked = true;
+        }};
+
+        payloadLandingPad = new PayloadLandingPad("payload-landing-pad") {{
             requirements(Category.effect, BuildVisibility.shown, ItemStack.with());
             size = 4;
             stackCapacity = 16;

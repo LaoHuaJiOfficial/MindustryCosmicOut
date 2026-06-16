@@ -6,20 +6,17 @@ import arc.scene.ui.layout.Table;
 import arc.struct.ObjectMap;
 import arc.struct.Seq;
 import mindustry.game.EventType;
-import mindustry.gen.Building;
 import mindustry.gen.Call;
 import mindustry.type.Item;
 import mindustry.type.Planet;
-import mindustry.type.Sector;
 import mindustry.world.blocks.ItemSelection;
-import mindustry.world.blocks.campaign.LandingPad;
-import mod.extend.sector.SectorLogistics;
-import mod.extend.sector.SectorLogisticsData;
+import mod.extend.sector.PlanetLogistics;
+import mod.extend.sector.PlanetLogisticsData;
 
 import static mindustry.Vars.*;
 
-public class ItemCargoLandingPad extends CargoLandingPad {
-    static ObjectMap<Item, Seq<ItemCargoLandingPadBuild>> waiting = new ObjectMap<>();
+public class PlanetaryItemLandingPad extends CargoLandingPad {
+    static ObjectMap<Item, Seq<PlanetaryItemLandingPadBuild>> waiting = new ObjectMap<>();
     static long lastUpdateId = -1;
 
     static {
@@ -29,11 +26,11 @@ public class ItemCargoLandingPad extends CargoLandingPad {
         });
     }
 
-    public ItemCargoLandingPad(String name) {
+    public PlanetaryItemLandingPad(String name) {
         super(name);
     }
 
-    public class ItemCargoLandingPadBuild extends CargoLandingPadBuild {
+    public class PlanetaryItemLandingPadBuild extends CargoLandingPadBuild {
         @Override
         public void handleLanding() {
             if (config == null) return;
@@ -54,7 +51,7 @@ public class ItemCargoLandingPad extends CargoLandingPad {
             if (state.isCampaign() && lastUpdateId != state.updateId) {
                 lastUpdateId = state.updateId;
 
-                logistics().syncItemImportTimers(state.getPlanet(), state.getSector(), itemCapacity);
+                logistics().syncItemImportTimers(state.getPlanet(), itemCapacity);
 
                 waiting.each((item, pads) -> {
                     pads.removeAll(l -> l.config != item);
@@ -85,7 +82,7 @@ public class ItemCargoLandingPad extends CargoLandingPad {
                     items.set(arriving, itemCapacity);
                     if (!isFake()) {
                         produced(arriving, itemCapacity);
-                        SectorLogistics.handleItemImport(state.getSector(), arriving, itemCapacity);
+                        PlanetLogistics.handleItemImport(state.getPlanet(), arriving, itemCapacity);
                     }
                     arriving = null;
                     arrivingTimer = 0f;
@@ -99,9 +96,9 @@ public class ItemCargoLandingPad extends CargoLandingPad {
             updateCooldown();
 
             if (config != null && (isFake() || (state.isCampaign() && !legacyDisabled()))) {
-                SectorLogisticsData data = logistics();
+                PlanetLogisticsData data = logistics();
                 if (cooldown <= 0f && efficiency > 0f && items.total() == 0 && !isLanding()
-                        && (isFake() || (data.getItemImportRate(state.getPlanet(), state.getSector(), config) > 0f
+                        && (isFake() || (data.getItemImportRate(state.getPlanet(), config) > 0f
                         && data.itemImportTimer(config) >= 1f))) {
                     if (isFake()) {
                         Call.landingPadLanded(tile);
@@ -114,7 +111,7 @@ public class ItemCargoLandingPad extends CargoLandingPad {
 
         @Override
         public void buildConfiguration(Table table) {
-            ItemSelection.buildTable(ItemCargoLandingPad.this, table, content.items(), () -> config, this::configure, selectionRows, selectionColumns);
+            ItemSelection.buildTable(PlanetaryItemLandingPad.this, table, content.items(), () -> config, this::configure, selectionRows, selectionColumns);
         }
 
         @Override
@@ -129,13 +126,13 @@ public class ItemCargoLandingPad extends CargoLandingPad {
                 int sources = 0;
                 float perSecond = 0f;
                 for (Planet planet : content.planets()) {
-                    for (Sector other : planet.sectors) {
-                        if (other == state.getSector() || !other.hasBase() || other.info.destination != state.getSector()) continue;
-                        float amount = SectorLogistics.get(other).getItemExport(config);
-                        if (amount <= 0f) continue;
-                        sources++;
-                        perSecond += amount;
-                    }
+                    if (planet == state.getPlanet() || !PlanetLogistics.hasBase(planet)) continue;
+                    PlanetLogisticsData otherData = PlanetLogistics.get(planet);
+                    if (otherData.destinationPlanet() != state.getPlanet()) continue;
+                    float amount = otherData.getItemExport(config);
+                    if (amount <= 0f) continue;
+                    sources++;
+                    perSecond += amount;
                 }
 
                 String str = Core.bundle.format("landing.sources", sources == 0 ? Core.bundle.get("none") : sources);

@@ -1,4 +1,4 @@
-package mod.extend.type.cargopad;
+package mod.extend.type.sectorpad;
 
 import arc.scene.ui.layout.Table;
 import arc.util.Nullable;
@@ -9,26 +9,25 @@ import mindustry.io.TypeIO;
 import mindustry.type.Liquid;
 import mindustry.type.Sector;
 import mindustry.world.blocks.ItemSelection;
-import mod.ModUI;
 import mod.extend.sector.SectorLogistics;
 
 import static mindustry.Vars.*;
 
-public class LiquidCargoLaunchPad extends CargoLaunchPad {
+public class LiquidLaunchPad extends SectorLaunchPad {
     public float launchVolume = 100f;
 
-    public LiquidCargoLaunchPad(String name) {
+    public LiquidLaunchPad(String name) {
         super(name);
         hasItems = false;
         hasLiquids = true;
         configurable = true;
 
-        config(Liquid.class, (LiquidCargoLaunchPadBuild build, Liquid liquid) -> {
+        config(Liquid.class, (LiquidLaunchPadBuild build, Liquid liquid) -> {
             if (!build.accessible() || liquid == null) return;
             build.liquidConfig = liquid;
         });
 
-        configClear((LiquidCargoLaunchPadBuild build) -> {
+        configClear((LiquidLaunchPadBuild build) -> {
             if (!build.accessible()) return;
             build.liquidConfig = null;
         });
@@ -38,10 +37,10 @@ public class LiquidCargoLaunchPad extends CargoLaunchPad {
     public void setBars() {
         super.setBars();
         removeBar("items");
-        addLiquidBar((LiquidCargoLaunchPadBuild build) -> build.liquidConfig);
+        addLiquidBar((LiquidLaunchPadBuild build) -> build.liquidConfig);
     }
 
-    public class LiquidCargoLaunchPadBuild extends CargoLaunchPadBuild {
+    public class LiquidLaunchPadBuild extends SectorLaunchPadBuild {
         public @Nullable Liquid liquidConfig;
 
         public boolean accessible() {
@@ -62,29 +61,30 @@ public class LiquidCargoLaunchPad extends CargoLaunchPad {
         @Override
         public void updateTile() {
             if (liquidConfig == null || !readyToLaunch()) return;
-
             if (liquids.get(liquidConfig) < launchVolume) return;
 
             SectorLogistics.handleLiquidExport(state.getSector(), liquidConfig, launchVolume);
+
+            Sector dest = destination();
+            if (dest != null && dest != state.getSector()) {
+                SectorLogistics.refreshImportRates(dest.planet, dest);
+            }
+
             fireLaunchVisual();
             liquids.remove(liquidConfig, launchVolume);
         }
 
         @Override
         public void buildConfiguration(Table table) {
-            ItemSelection.buildTable(LiquidCargoLaunchPad.this, table, content.liquids(), () -> liquidConfig, this::configure);
-            CargoPadUI.buildDestinationButton(table, () -> {
-                ModUI.starmap.showSectorSelect(state.getSector(), dest -> {
-                    if (!state.isCampaign() || dest == null) return;
-                    Sector prev = state.rules.sector.info.destination;
-                    state.rules.sector.info.destination = dest;
-                    state.rules.sector.saveInfo();
-                    SectorLogistics.flushStats(state.getSector());
-                    if (prev != null) SectorLogistics.refreshImportRates(prev.planet, prev);
-                    SectorLogistics.refreshImportRates(dest.planet, dest);
-                });
+            ItemSelection.buildTable(LiquidLaunchPad.this, table, content.liquids(), () -> liquidConfig, this::configure);
+
+            if (!state.isCampaign() || net.client()) {
                 deselect();
-            });
+                return;
+            }
+
+            table.row();
+            buildDestinationConfig(table);
         }
 
         @Override
@@ -100,14 +100,12 @@ public class LiquidCargoLaunchPad extends CargoLaunchPad {
         @Override
         public void read(Reads read, byte revision) {
             super.read(read, revision);
-
             liquidConfig = TypeIO.readLiquid(read);
         }
 
         @Override
         public void write(Writes write) {
             super.write(write);
-
             TypeIO.writeLiquid(write, liquidConfig);
         }
     }

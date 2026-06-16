@@ -6,8 +6,10 @@ import arc.util.io.Writes;
 import arc.util.Nullable;
 import mindustry.game.Schematic;
 import mindustry.type.PayloadSeq;
+import mindustry.type.Planet;
 import mod.extend.starmap.HexCoord;
 import mod.extend.starmap.HexPlanetMap;
+import mod.extend.starmap.StarMapPlanets;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -27,7 +29,7 @@ public class Spaceship {
     public String name = "Spaceship";
     public Status status = Status.docked;
 
-    public @Nullable ModPlanet departurePlanet, destinationPlanet;
+    public @Nullable Planet departurePlanet, destinationPlanet;
     public HexCoord currentHex = new HexCoord();
     public Seq<HexCoord> route = new Seq<>();
     public int routeIndex;
@@ -45,7 +47,7 @@ public class Spaceship {
         return Math.max(1, (int)Math.ceil(shipMass / engineThrust));
     }
 
-    public void launch(ModPlanet departure, ModPlanet destination){
+    public void launch(Planet departure, Planet destination){
         this.departurePlanet = departure;
         this.destinationPlanet = destination;
         this.route.clear();
@@ -53,8 +55,8 @@ public class Spaceship {
         this.turnProgress = 0;
         this.status = Status.traveling;
 
-        HexCoord from = departure.hexCoord();
-        HexCoord to = destination.hexCoord();
+        HexCoord from = StarMapPlanets.get(departure).hexCoord();
+        HexCoord to = StarMapPlanets.get(destination).hexCoord();
         this.route.addAll(HexCoord.line(from, to));
         this.currentHex.set(route.first());
     }
@@ -85,13 +87,13 @@ public class Spaceship {
     public void arrive(){
         status = Status.arrived;
         if(destinationPlanet != null){
-            currentHex.set(destinationPlanet.hexCoord());
+            currentHex.set(StarMapPlanets.get(destinationPlanet).hexCoord());
         }
         SpaceshipManager.onSpaceshipArrived(this);
     }
 
-    public @Nullable ModPlanet planetAt(HexPlanetMap map){
-        return map.planetAt(currentHex) instanceof ModPlanet mod ? mod : null;
+    public @Nullable Planet planetAt(HexPlanetMap map){
+        return map.planetAt(currentHex);
     }
 
     public void applyStats(SpaceshipStats stats){
@@ -133,8 +135,8 @@ public class Spaceship {
         id = save.id;
         name = save.name;
         status = Status.valueOf(save.status);
-        departurePlanet = save.departure == null ? null : (ModPlanet)content.planet(save.departure);
-        destinationPlanet = save.destination == null ? null : (ModPlanet)content.planet(save.destination);
+        departurePlanet = save.departure == null ? null : content.planet(save.departure);
+        destinationPlanet = save.destination == null ? null : content.planet(save.destination);
         currentHex.a = save.currentA;
         currentHex.b = save.currentB;
         currentHex.c = save.currentC;

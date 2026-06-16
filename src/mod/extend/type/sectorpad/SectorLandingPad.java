@@ -1,4 +1,4 @@
-package mod.extend.type.cargopad;
+package mod.extend.type.sectorpad;
 
 import arc.graphics.g2d.Draw;
 import arc.graphics.g2d.Fill;
@@ -15,27 +15,22 @@ import mindustry.graphics.Pal;
 import mindustry.type.Liquid;
 import mindustry.world.blocks.campaign.LandingPad;
 import mindustry.world.blocks.liquid.LiquidBlock;
-import mod.extend.sector.PlanetLogistics;
-import mod.extend.sector.PlanetLogisticsData;
+import mod.extend.sector.SectorLogistics;
+import mod.extend.sector.SectorLogisticsData;
 
 import static mindustry.Vars.*;
 
-public class CargoLandingPad extends LandingPad {
-    public CargoLandingPad(String name) {
+public class SectorLandingPad extends LandingPad {
+    public SectorLandingPad(String name) {
         super(name);
     }
 
-    @Override
-    public void setBars() {
-        super.setBars();
-    }
-
-    public class CargoLandingPadBuild extends LandingPadBuild {
+    public class SectorLandingPadBuild extends LandingPadBuild {
         public Liquid arrivingLiquid;
         public UnlockableContent arrivingPayload;
 
-        protected PlanetLogisticsData logistics() {
-            return PlanetLogistics.get(state.getPlanet());
+        protected SectorLogisticsData logistics() {
+            return SectorLogistics.get(state.getSector());
         }
 
         protected boolean legacyDisabled() {

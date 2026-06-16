@@ -38,10 +38,14 @@ import mod.extend.starmap.HexGrid;
 import mod.extend.starmap.HexPlanetMap;
 import arc.func.Cons;
 import arc.struct.ObjectSet;
+import arc.struct.OrderedMap;
+import arc.struct.Seq;
 import mindustry.type.Sector;
-import mod.extend.sector.SectorLogistics;
-import mod.extend.sector.SectorLogisticsData;
-import mod.extend.type.ModPlanet;
+import mod.extend.sector.PlanetLogistics;
+import mod.extend.sector.PlanetLogisticsData;
+import mod.ModUI;
+import mod.extend.starmap.StarMapPlanetData;
+import mod.extend.starmap.StarMapPlanets;
 
 import static mindustry.Vars.*;
 import static mindustry.graphics.g3d.PlanetRenderer.camLength;
@@ -65,9 +69,11 @@ public class StarMapDialog extends BaseDialog {
 
     public @Nullable Texture spaceTexture;
 
-    public final FrameBuffer planetBuffer = new FrameBuffer(1, 1);
-    public final PlanetParams planetPreview = new PlanetParams();
-    public int planetBufferSize;
+    static final int maxPlanetPreviewsMobile = 32;
+
+    final OrderedMap<PlanetPreviewKey, FrameBuffer> planetPreviews = new OrderedMap<>();
+    final PlanetParams planetPreview = new PlanetParams();
+    long lastPreviewClearTime;
 
     public StarMapDialog() {
         super("", Styles.defaultDialog);
@@ -156,12 +162,10 @@ public class StarMapDialog extends BaseDialog {
     }
 
     void refreshStarmapLogistics() {
-        SectorLogistics.flushAllStats();
+        PlanetLogistics.flushAllStats();
         for (Planet planet : content.planets()) {
-            for (Sector sector : planet.sectors) {
-                if (sector.hasBase()) {
-                    SectorLogistics.refreshImportRates(planet, sector);
-                }
+            if (PlanetLogistics.hasBase(planet)) {
+                PlanetLogistics.refreshImportRates(planet);
             }
         }
     }
@@ -172,22 +176,22 @@ public class StarMapDialog extends BaseDialog {
         onSectorSelected = callback;
         currentPlanet = from != null ? from.planet : null;
         show();
-        if (from != null && from.planet instanceof ModPlanet mp) {
-            view.focusHex(hexPlanets.planetCoord(mp));
+        if (from != null) {
+            view.focusHex(hexPlanets.planetCoord(from.planet));
         }
     }
 
-    public static boolean isStarmapPlanet(ModPlanet planet) {
-        return planet.parent != null;
+    public static boolean isStarmapPlanet(Planet planet) {
+        return StarMapPlanets.isStarmapPlanet(planet);
     }
 
-    public static boolean isSelectableDestination(ModPlanet planet, @Nullable Sector from) {
+    public static boolean isSelectableDestination(Planet planet, @Nullable Sector from) {
         if (!isStarmapPlanet(planet)) return false;
-        Sector dest = resolveSector(planet);
-        return dest != null && dest != from;
+        if (!PlanetLogistics.hasBase(planet)) return false;
+        return from == null || from.planet != planet;
     }
 
-    public static @Nullable Sector resolveSector(ModPlanet planet) {
+    public static @Nullable Sector resolveSector(Planet planet) {
         for (Sector sector : planet.sectors) {
             if (sector.hasBase()) return sector;
         }
@@ -198,9 +202,9 @@ public class StarMapDialog extends BaseDialog {
     }
 
     void confirmSectorSelect() {
-        if (!(currentPlanet instanceof ModPlanet modPlanet) || onSectorSelected == null) return;
+        if (currentPlanet == null || !isStarmapPlanet(currentPlanet) || onSectorSelected == null) return;
 
-        Sector dest = resolveSector(modPlanet);
+        Sector dest = resolveSector(currentPlanet);
         if (dest == null || dest == selectFrom) return;
 
         onSectorSelected.get(dest);
@@ -266,7 +270,7 @@ public class StarMapDialog extends BaseDialog {
         stable.clear();
         stable.background(Styles.black6);
 
-        Sector sector = planet instanceof ModPlanet modPlanet ? resolveSector(modPlanet) : null;
+        Sector sector = isStarmapPlanet(planet) ? resolveSector(planet) : null;
 
         stable.table(title -> {
             title.add("[accent]" + planet.localizedName).padLeft(3).row();
@@ -276,18 +280,14 @@ public class StarMapDialog extends BaseDialog {
         }).pad(0).row();
         stable.image().color(Pal.accent).fillX().height(3f).pad(3f).row();
 
-        if (sector != null) {
-            SectorLogistics.refreshImportRates(sector.planet, sector);
-            stable.pane(p -> StarMapLogisticsUI.buildStats(p, sector))
-                    .width(280f)
-                    .maxHeight(Math.min(420f, Core.graphics.getHeight() * 0.45f))
-                    .scrollY(true)
-                    .row();
+        if (sector != null && sector.hasBase()) {
+            stable.button("@stats", Icon.info, Styles.cleart, () -> ModUI.planetLogisticsStats.show(planet, sector))
+                    .height(40f).fillX().row();
         }
 
         if (selectingDestination) {
             stable.button("@sectors.launch", Icon.upOpen, this::confirmSectorSelect)
-                    .disabled(!(currentPlanet instanceof ModPlanet mp) || !isSelectableDestination(mp, selectFrom))
+                    .disabled(currentPlanet == null || !isSelectableDestination(currentPlanet, selectFrom))
                     .size(200f, 54f).bottom().row();
         } else {
             stable.button("View Planet", Icon.eye, () -> {
@@ -316,11 +316,11 @@ public class StarMapDialog extends BaseDialog {
     }
 
     static class LogisticsLink {
-        final ModPlanet from, to;
+        final StarMapPlanetData from, to;
         final LogisticsLane lane;
         final boolean exportFromSelected;
 
-        LogisticsLink(ModPlanet from, ModPlanet to, LogisticsLane lane, boolean exportFromSelected) {
+        LogisticsLink(StarMapPlanetData from, StarMapPlanetData to, LogisticsLane lane, boolean exportFromSelected) {
             this.from = from;
             this.to = to;
             this.lane = lane;
@@ -328,58 +328,55 @@ public class StarMapDialog extends BaseDialog {
         }
     }
 
-    void eachLogisticsLink(@Nullable ModPlanet selectedPlanet, @Nullable Sector selectedSec, Cons<LogisticsLink> cons) {
+    void eachLogisticsLink(@Nullable Planet selectedPlanet, Cons<LogisticsLink> cons) {
         ObjectSet<String> seen = new ObjectSet<>();
 
-        if (selectedPlanet != null && selectedSec != null && selectedSec.hasBase()) {
-            SectorLogisticsData selectedData = SectorLogistics.get(selectedSec);
+        if (selectedPlanet != null && PlanetLogistics.hasBase(selectedPlanet)) {
+            PlanetLogisticsData selectedData = PlanetLogistics.get(selectedPlanet);
 
-            for (Planet planet : content.planets()) {
-                for (Sector sec : planet.sectors) {
-                    if (!sec.hasBase() || sec == selectedSec) continue;
-                    if (!(sec.planet instanceof ModPlanet other) || !isStarmapPlanet(other) || other == selectedPlanet) continue;
+            for (StarMapPlanetData otherEntry : StarMapPlanets.all) {
+                Planet other = otherEntry.planet;
+                if (!isStarmapPlanet(other) || other == selectedPlanet) continue;
+                if (!PlanetLogistics.hasBase(other)) continue;
 
-                    SectorLogisticsData secData = SectorLogistics.get(sec);
-                    String importKey = other.name + "->" + selectedPlanet.name;
+                PlanetLogisticsData otherData = PlanetLogistics.get(other);
+                String importKey = other.name + "->" + selectedPlanet.name;
 
-                    if (sec.info.destination == selectedSec) {
-                        addLink(cons, seen, importKey, other, selectedPlanet, secData, false);
-                    }
+                if (otherData.destinationPlanet() == selectedPlanet) {
+                    addLink(cons, seen, importKey, otherEntry, StarMapPlanets.get(selectedPlanet), otherData, false);
+                }
 
-                    if (selectedSec.info.destination == sec) {
-                        addLink(cons, seen, selectedPlanet.name + "->" + other.name, selectedPlanet, other, selectedData, true);
-                    }
+                if (selectedData.destinationPlanet() == other) {
+                    addLink(cons, seen, selectedPlanet.name + "->" + other.name, StarMapPlanets.get(selectedPlanet), otherEntry, selectedData, true);
                 }
             }
             return;
         }
 
-        for (Planet planet : content.planets()) {
-            if (!(planet instanceof ModPlanet from) || !isStarmapPlanet(from)) continue;
+        for (StarMapPlanetData fromEntry : StarMapPlanets.all) {
+            Planet from = fromEntry.planet;
+            if (!isStarmapPlanet(from)) continue;
+            if (!PlanetLogistics.hasBase(from)) continue;
 
-            for (Sector source : planet.sectors) {
-                if (!source.hasBase() || source.info.destination == null) continue;
+            Planet dest = PlanetLogistics.get(from).destinationPlanet();
+            StarMapPlanetData toEntry = dest == null ? null : StarMapPlanets.get(dest);
+            if (toEntry == null || !isStarmapPlanet(dest) || from == dest) continue;
 
-                Sector dest = source.info.destination;
-                if (!(dest.planet instanceof ModPlanet to) || !isStarmapPlanet(to) || from == to) continue;
+            String key = from.name + "->" + dest.name;
+            if (seen.contains(key)) continue;
+            seen.add(key);
 
-                String key = from.name + "->" + to.name;
-                if (seen.contains(key)) continue;
-                seen.add(key);
-
-                SectorLogisticsData data = SectorLogistics.get(source);
-                addLink(cons, seen, key, from, to, data, true);
-            }
+            addLink(cons, seen, key, fromEntry, toEntry, PlanetLogistics.get(from), true);
         }
     }
 
-    void addLink(Cons<LogisticsLink> cons, ObjectSet<String> seen, String key, ModPlanet from, ModPlanet to, SectorLogisticsData data, boolean exportFromSelected) {
+    void addLink(Cons<LogisticsLink> cons, ObjectSet<String> seen, String key, StarMapPlanetData from, StarMapPlanetData to, PlanetLogisticsData data, boolean exportFromSelected) {
         if (data.anyPayloadExports()) tryAddLink(cons, seen, key + ":payload", from, to, LogisticsLane.payload, exportFromSelected);
         if (data.anyItemExports()) tryAddLink(cons, seen, key + ":item", from, to, LogisticsLane.item, exportFromSelected);
         if (data.anyLiquidExports()) tryAddLink(cons, seen, key + ":liquid", from, to, LogisticsLane.liquid, exportFromSelected);
     }
 
-    void tryAddLink(Cons<LogisticsLink> cons, ObjectSet<String> seen, String key, ModPlanet from, ModPlanet to, LogisticsLane lane, boolean exportFromSelected) {
+    void tryAddLink(Cons<LogisticsLink> cons, ObjectSet<String> seen, String key, StarMapPlanetData from, StarMapPlanetData to, LogisticsLane lane, boolean exportFromSelected) {
         if (seen.contains(key)) return;
         seen.add(key);
         cons.get(new LogisticsLink(from, to, lane, exportFromSelected));
@@ -412,18 +409,41 @@ public class StarMapDialog extends BaseDialog {
         Draw.reset();
     }
 
-    //todo cache
-    boolean renderPlanetPreview(Planet planet, int size){
-        if(planet.mesh == null || size < 1) return false;
-        if(!selectingDestination && !planet.visible) return false;
+    @Nullable FrameBuffer getPlanetPreviewBuffer(Planet planet, int size) {
+        if (planet.mesh == null || size < 1) return null;
+        if (!selectingDestination && !planet.visible) return null;
 
-        Draw.flush();
-        if(planetBuffer.resizeCheck(size, size)){
-            planetBufferSize = size;
+        if (mobile && Time.timeSinceMillis(lastPreviewClearTime) > 2000 && planetPreviews.size > maxPlanetPreviewsMobile) {
+            Seq<PlanetPreviewKey> keys = planetPreviews.orderedKeys().copy();
+            for (int i = 0; i < planetPreviews.size - maxPlanetPreviewsMobile; i++) {
+                planetPreviews.remove(keys.get(i)).dispose();
+            }
+            lastPreviewClearTime = Time.millis();
         }
 
-        planetBuffer.begin(Color.clear);
+        PlanetPreviewKey key = new PlanetPreviewKey(planet, size);
+        if (!planetPreviews.containsKey(key)) {
+            planetPreviews.put(key, createPlanetPreviewBuffer(planet, size));
+        }
 
+        return planetPreviews.get(key);
+    }
+
+    FrameBuffer createPlanetPreviewBuffer(Planet planet, int size) {
+        Draw.flush();
+
+        FrameBuffer buffer = new FrameBuffer(size, size);
+        buffer.begin(Color.clear);
+
+        setupPlanetPreview(planet, size);
+        renderer.planets.render(planetPreview);
+
+        buffer.end();
+        Draw.flush();
+        return buffer;
+    }
+
+    void setupPlanetPreview(Planet planet, int size) {
         planetPreview.planet = planet;
         planetPreview.viewW = size;
         planetPreview.viewH = size;
@@ -436,22 +456,36 @@ public class StarMapDialog extends BaseDialog {
         planetPreview.otherCamPos = null;
         planetPreview.otherCamAlpha = 0f;
         planetPreview.camPos.set(0f, camLength, 0.1f);
-
-        renderer.planets.render(planetPreview);
-
-        planetBuffer.end();
-        Draw.flush();
-        return true;
     }
 
-    void drawPlanetFallback(float px, float py, float size, ModPlanet modPlanet, float alpha){
+    static final class PlanetPreviewKey {
+        final Planet planet;
+        final int size;
+
+        PlanetPreviewKey(Planet planet, int size) {
+            this.planet = planet;
+            this.size = size;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            return obj instanceof PlanetPreviewKey other && other.planet == planet && other.size == size;
+        }
+
+        @Override
+        public int hashCode() {
+            return planet.hashCode() * 31 + size;
+        }
+    }
+
+    void drawPlanetFallback(float px, float py, float size, Planet planet, float alpha){
         float radius = size / 2f;
 
         Draw.z(1f);
-        Draw.color(modPlanet.iconColor, alpha * 0.85f);
+        Draw.color(planet.iconColor, alpha * 0.85f);
         Fill.circle(px, py, radius);
 
-        Lines.stroke(Scl.scl(2f), modPlanet.iconColor);
+        Lines.stroke(Scl.scl(2f), planet.iconColor);
         Draw.alpha(alpha);
         Lines.circle(px, py, radius);
 
@@ -500,7 +534,7 @@ public class StarMapDialog extends BaseDialog {
                     updateHoverHex(x, y);
                     Planet planet = hexPlanets.planetAt(hoverHex);
 
-                    if (planet instanceof ModPlanet) {
+                    if (planet != null && StarMapPlanets.has(planet)) {
                         currentPlanet = planet;
                         updateSelectedPlanet();
                     } else if (!selectingDestination && planet != null) {
@@ -536,8 +570,8 @@ public class StarMapDialog extends BaseDialog {
 
         @Nullable HexCoord currentSectorHex() {
             Sector sector = selectingDestination ? selectFrom : (state.isCampaign() ? state.rules.sector : null);
-            if (sector == null || !(sector.planet instanceof ModPlanet mp)) return null;
-            return hexPlanets.planetCoord(mp);
+            if (sector == null) return null;
+            return hexPlanets.planetCoord(sector.planet);
         }
 
         void updateHoverHex(float localX, float localY){
@@ -586,14 +620,13 @@ public class StarMapDialog extends BaseDialog {
 
         void drawLogisticsArrows(float offsetX, float offsetY) {
             Draw.z(0.65f);
-            ModPlanet selectedPlanet = currentPlanet instanceof ModPlanet mp ? mp : null;
-            Sector selectedSec = selectedPlanet != null ? resolveSector(selectedPlanet) : null;
+            Planet selectedPlanet = currentPlanet;
 
-            eachLogisticsLink(selectedPlanet, selectedSec, link -> {
+            eachLogisticsLink(selectedPlanet, link -> {
                 hexGrid.hexToWorld(hexPlanets.planetCoord(link.from), offsetX, offsetY, Tmp.v1);
                 hexGrid.hexToWorld(hexPlanets.planetCoord(link.to), offsetX, offsetY, Tmp.v2);
 
-                boolean highlight = selectedPlanet != null && (selectedPlanet == link.from || selectedPlanet == link.to);
+                boolean highlight = selectedPlanet != null && (selectedPlanet == link.from.planet || selectedPlanet == link.to.planet);
                 float alpha = parentAlpha * (highlight ? 0.8f : 0.4f);
                 float stroke = hexGrid.lineWidth * (highlight ? 1.5f : 1f);
 
@@ -616,23 +649,21 @@ public class StarMapDialog extends BaseDialog {
 
         void drawPlanets(float offsetX, float offsetY){
             drawPlanetOrbits(offsetX, offsetY);
-            for(Planet planet : content.planets()){
-                if(planet instanceof ModPlanet modPlanet){
-                    drawPlanet(modPlanet, offsetX, offsetY);
-                }
+            for(StarMapPlanetData data : StarMapPlanets.all){
+                drawPlanet(data, offsetX, offsetY);
             }
         }
 
         void drawPlanetOrbits(float offsetX, float offsetY){
             Draw.z(0.5f);
 
-            for(Planet planet : content.planets()){
-                if(!(planet instanceof ModPlanet child)) continue;
-                if(!(child.parent instanceof ModPlanet parent)) continue;
-                if(!child.drawOrbit) continue;
+            for(StarMapPlanetData childData : StarMapPlanets.all){
+                Planet child = childData.planet;
+                StarMapPlanetData parentData = StarMapPlanets.get(child.parent);
+                if(parentData == null || !child.drawOrbit) continue;
 
-                hexGrid.hexToWorld(hexPlanets.planetCoord(child), offsetX, offsetY, Tmp.v1);
-                hexGrid.hexToWorld(hexPlanets.planetCoord(parent), offsetX, offsetY, Tmp.v2);
+                hexGrid.hexToWorld(hexPlanets.planetCoord(childData), offsetX, offsetY, Tmp.v1);
+                hexGrid.hexToWorld(hexPlanets.planetCoord(parentData), offsetX, offsetY, Tmp.v2);
 
                 float orbitRadius = Tmp.v1.dst(Tmp.v2);
                 if(orbitRadius < hexGrid.size * 0.25f) continue;
@@ -647,12 +678,11 @@ public class StarMapDialog extends BaseDialog {
                 Lines.line(Tmp.v2.x, Tmp.v2.y, Tmp.v1.x, Tmp.v1.y);
             }
 
-            for(Planet planet : content.planets()){
-                if(!(planet instanceof ModPlanet from)) continue;
+            for(StarMapPlanetData fromData : StarMapPlanets.all){
+                hexGrid.hexToWorld(hexPlanets.planetCoord(fromData), offsetX, offsetY, Tmp.v1);
 
-                for(ModPlanet link : from.links){
-                    hexGrid.hexToWorld(hexPlanets.planetCoord(from), offsetX, offsetY, Tmp.v1);
-                    hexGrid.hexToWorld(hexPlanets.planetCoord(link), offsetX, offsetY, Tmp.v2);
+                for(StarMapPlanetData linkData : fromData.links){
+                    hexGrid.hexToWorld(hexPlanets.planetCoord(linkData), offsetX, offsetY, Tmp.v2);
 
                     Lines.stroke(hexGrid.lineWidth * 1.25f);
                     Draw.color(Pal.accent);
@@ -668,10 +698,8 @@ public class StarMapDialog extends BaseDialog {
             HexCoord selectedHex = selectedHex();
 
             Draw.z(0.05f);
-            for(Planet planet : content.planets()){
-                if(!(planet instanceof ModPlanet modPlanet)) continue;
-
-                HexCoord hex = hexPlanets.planetCoord(modPlanet);
+            for(StarMapPlanetData data : StarMapPlanets.all){
+                HexCoord hex = hexPlanets.planetCoord(data);
                 if(selectedHex != null && hex.equals(selectedHex)) continue;
                 if(currentSectorHex() != null && hex.equals(currentSectorHex())) continue;
 
@@ -716,30 +744,31 @@ public class StarMapDialog extends BaseDialog {
         }
 
         @Nullable HexCoord selectedHex(){
-            if(!(currentPlanet instanceof ModPlanet modPlanet)) return null;
-            return hexPlanets.planetCoord(modPlanet);
+            return currentPlanet == null ? null : hexPlanets.planetCoord(currentPlanet);
         }
 
-        void drawPlanet(ModPlanet modPlanet, float offsetX, float offsetY){
-            hexGrid.hexToWorld(hexPlanets.planetCoord(modPlanet), offsetX, offsetY, Tmp.v1);
+        void drawPlanet(StarMapPlanetData data, float offsetX, float offsetY){
+            Planet planet = data.planet;
+            hexGrid.hexToWorld(hexPlanets.planetCoord(data), offsetX, offsetY, Tmp.v1);
             float px = Tmp.v1.x, py = Tmp.v1.y;
-            float size = Scl.scl(modPlanet.radius) * modPlanet.starmapSize;
+            float size = Scl.scl(planet.radius) * data.starmapSize;
             int texSize = (int) Math.max(hexGrid.size, Mathf.ceil(size) * hexGrid.size);
-            float drawAlpha = parentAlpha * (selectingDestination && modPlanet == selectFromPlanet() ? 0.55f : 1f);
+            float drawAlpha = parentAlpha * (selectingDestination && planet == selectFromPlanet() ? 0.55f : 1f);
 
             Draw.z(1f);
-            if(renderPlanetPreview(modPlanet, texSize)){
+            FrameBuffer preview = getPlanetPreviewBuffer(planet, texSize);
+            if (preview != null) {
                 Draw.color(Color.white, drawAlpha);
-                Draw.rect(Draw.wrap(planetBuffer.getTexture()), px, py, size * hexGrid.size, -size * hexGrid.size);
-            }else{
-                drawPlanetFallback(px, py, size * hexGrid.size / 2f, modPlanet, drawAlpha);
+                Draw.rect(Draw.wrap(preview.getTexture()), px, py, size * hexGrid.size, -size * hexGrid.size);
+            } else {
+                drawPlanetFallback(px, py, size * hexGrid.size / 2f, planet, drawAlpha);
             }
 
             Draw.reset();
         }
 
-        @Nullable ModPlanet selectFromPlanet() {
-            return selectFrom != null && selectFrom.planet instanceof ModPlanet mp ? mp : null;
+        @Nullable Planet selectFromPlanet() {
+            return selectFrom == null ? null : selectFrom.planet;
         }
     }
 }

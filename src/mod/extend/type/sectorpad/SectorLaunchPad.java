@@ -1,5 +1,6 @@
-package mod.extend.type.cargopad;
+package mod.extend.type.sectorpad;
 
+import arc.Core;
 import arc.graphics.g2d.Draw;
 import arc.graphics.g2d.Fill;
 import arc.math.Mathf;
@@ -13,22 +14,21 @@ import mindustry.gen.LaunchPayload;
 import mindustry.graphics.Drawf;
 import mindustry.graphics.Pal;
 import mindustry.type.Liquid;
-import mindustry.type.Planet;
+import mindustry.type.Sector;
 import mindustry.ui.Styles;
 import mindustry.world.blocks.campaign.LaunchPad;
 import mindustry.world.blocks.liquid.LiquidBlock;
-import mod.ModUI;
-import mod.extend.sector.PlanetLogistics;
+import mod.extend.sector.SectorLogistics;
 
 import static mindustry.Vars.*;
 
-public class CargoLaunchPad extends LaunchPad {
-    public CargoLaunchPad(String name) {
+public class SectorLaunchPad extends LaunchPad {
+    public SectorLaunchPad(String name) {
         super(name);
         launchTime = 60f;
     }
 
-    public class CargoLaunchPadBuild extends LaunchPadBuild {
+    public class SectorLaunchPadBuild extends LaunchPadBuild {
         protected float launchFillRatio() {
             return hasItems ? (float) items.total() / itemCapacity : 0f;
         }
@@ -88,12 +88,38 @@ public class CargoLaunchPad extends LaunchPad {
             launchCounter = 0f;
         }
 
-        protected @Nullable Planet destination() {
-            return state.isCampaign() ? PlanetLogistics.get(state.getPlanet()).destinationPlanet() : null;
+        protected @Nullable Sector destination() {
+            return state.isCampaign() && state.rules.sector != null ? state.rules.sector.info.destination : null;
         }
 
         protected boolean readyToLaunch() {
             return (launchCounter += edelta()) >= launchTime;
+        }
+
+        protected void buildDestinationConfig(Table table) {
+            table.button(Icon.upOpen, Styles.cleari, () -> {
+                ui.planet.showSelect(state.rules.sector, other -> {
+                    if (state.isCampaign() && other.planet == state.rules.sector.planet) {
+                        SectorLogistics.setDestination(state.rules.sector, other);
+                    }
+                });
+                deselect();
+            }).size(40f);
+        }
+
+        @Override
+        public void display(Table table) {
+            super.display(table);
+
+            if (!state.isCampaign() || net.client() || team != player.team()) return;
+
+            table.row();
+            table.label(() -> {
+                Sector dest = state.rules.sector == null ? null : state.rules.sector.info.destination;
+                return Core.bundle.format("launch.destination",
+                        dest == null || !dest.hasBase() ? Core.bundle.get("sectors.nonelaunch") :
+                                "[accent]" + dest.name());
+            }).pad(4).wrap().width(200f).left();
         }
 
         @Override
@@ -103,19 +129,7 @@ public class CargoLaunchPad extends LaunchPad {
                 return;
             }
 
-            table.button(Icon.upOpen, Styles.cleari, () -> {
-                ModUI.starmap.showSectorSelect(state.getSector(), dest -> {
-                    if (!state.isCampaign() || dest == null) return;
-
-                    Planet prev = PlanetLogistics.get(state.getPlanet()).destinationPlanet();
-                    PlanetLogistics.get(state.getPlanet()).setDestination(dest.planet);
-                    PlanetLogistics.flushStats(state.rules.sector);
-                    PlanetLogistics.save(state.getPlanet());
-                    if (prev != null) PlanetLogistics.refreshImportRates(prev);
-                    PlanetLogistics.refreshImportRates(dest.planet);
-                });
-                deselect();
-            }).size(40f);
+            buildDestinationConfig(table);
         }
     }
 }

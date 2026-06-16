@@ -142,6 +142,7 @@ nb-configuration.xml
 
 /local.properties
 .gradle/
+.gradle-user-home/
 gradle-app.setting
 /build/
 /android/build/
@@ -155,3 +156,4 @@ gradle-app.setting
 .DS_Store
 Thumbs.db
 android/libs/
+/.gradle-user-home/

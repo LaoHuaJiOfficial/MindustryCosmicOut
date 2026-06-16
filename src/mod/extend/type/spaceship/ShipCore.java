@@ -11,8 +11,6 @@ import mindustry.ui.Styles;
 import mindustry.world.Block;
 import mindustry.world.meta.BlockFlag;
 import mindustry.world.meta.BlockGroup;
-import mod.content.ModPlanets;
-import mod.extend.type.ModPlanet;
 import mod.extend.type.Spaceship;
 import mod.extend.type.SpaceshipManager;
 import mod.extend.type.SpaceshipStats;
