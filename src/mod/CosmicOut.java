@@ -27,9 +27,10 @@ public class CosmicOut extends Mod{
             });
 
             PlanetDialog.debugSelect = true;
-            PlanetDialog.debugSelect = true;
 
+            Planets.erekir.allowLaunchToNumbered = true;
             Planets.erekir.ruleSetter = r -> {
+                r.waves = false;
                 r.infiniteResources = true;
                 r.waveTeam = Team.malis;
                 r.placeRangeCheck = false;
@@ -42,6 +43,7 @@ public class CosmicOut extends Mod{
             };
 
             Planets.serpulo.ruleSetter = r -> {
+                r.waves = false;
                 r.infiniteResources = true;
                 r.waveTeam = Team.crux;
                 r.placeRangeCheck = false;

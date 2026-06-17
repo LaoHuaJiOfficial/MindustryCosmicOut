@@ -31,7 +31,7 @@ public class ModUI {
             Table stable = ui.planet.sectorTop;
             stable.update(() -> {
                 Element result = stable.find(e -> e instanceof TextButton b && Core.bundle.get("stats").contentEquals(b.getText()));
-
+                if (result == null) return;
                 boolean first = true;
                 for (var listener: result.getListeners()) {
                     if (listener instanceof ClickListener) {

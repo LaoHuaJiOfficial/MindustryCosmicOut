@@ -3,6 +3,11 @@ package mod.extend.type.cargopad;
 import arc.Core;
 import arc.Events;
 import arc.graphics.Color;
+import arc.graphics.g2d.Draw;
+import arc.graphics.g2d.TextureRegion;
+import arc.math.Interp;
+import arc.math.Mathf;
+import arc.math.geom.Vec2;
 import arc.scene.ui.layout.Table;
 import arc.struct.ObjectMap;
 import arc.struct.Seq;
@@ -10,9 +15,13 @@ import arc.util.Nullable;
 import arc.util.io.Reads;
 import arc.util.io.Writes;
 import mindustry.ctype.UnlockableContent;
+import mindustry.game.EventType.UnitCreateEvent;
 import mindustry.gen.Call;
 import mindustry.gen.Iconc;
+import mindustry.gen.Unit;
+import mindustry.graphics.Layer;
 import mindustry.graphics.Pal;
+import mindustry.io.TypeIO;
 import mindustry.type.PayloadSeq;
 import mindustry.type.Planet;
 import mindustry.type.UnitType;
@@ -25,6 +34,7 @@ import mindustry.world.blocks.payloads.UnitPayload;
 import mindustry.world.blocks.storage.CoreBlock;
 import mod.extend.sector.PlanetLogistics;
 import mod.extend.sector.PlanetLogisticsData;
+import mod.extend.type.PayloadDirectedOutput;
 
 import static mindustry.Vars.*;
 
@@ -39,8 +49,8 @@ public class PlanetaryPayloadLandingPad extends CargoLandingPad {
         });
     }
 
-    public int stackCapacity = 16;
-    public int landingBatch = 1;
+    public float payloadSpeed = 0.7f, payloadRotateSpeed = 5f;
+    public TextureRegion outRegion;
 
     public PlanetaryPayloadLandingPad(String name) {
         super(name);
@@ -48,24 +58,46 @@ public class PlanetaryPayloadLandingPad extends CargoLandingPad {
         acceptsItems = false;
         outputsPayload = true;
         update = true;
+        rotate = true;
+        commandable = true;
+        clipSize = 120;
+        regionRotated1 = 1;
+        selectionRows = selectionColumns = 8;
 
         config(Block.class, (PlanetaryPayloadLandingPadBuild build, Block block) -> {
             if (!build.accessible() || !canProduce(block) || build.configBlock == block) return;
             build.configBlock = block;
             build.unit = null;
+            build.clearOutputPayload();
         });
 
         config(UnitType.class, (PlanetaryPayloadLandingPadBuild build, UnitType unit) -> {
             if (!build.accessible() || !canProduce(unit) || build.unit == unit) return;
             build.unit = unit;
             build.configBlock = null;
+            build.clearOutputPayload();
         });
 
         configClear((PlanetaryPayloadLandingPadBuild build) -> {
             if (!build.accessible()) return;
             build.configBlock = null;
             build.unit = null;
+            build.clearOutputPayload();
         });
+    }
+
+    @Override
+    public void load() {
+        super.load();
+        TextureRegion found = Core.atlas.find(name + "-out");
+        if (!found.found() && minfo.mod != null) found = Core.atlas.find(minfo.mod.name + "-factory-out-" + size);
+        if (!found.found()) found = Core.atlas.find("factory-out-" + size);
+        outRegion = found;
+    }
+
+    @Override
+    public TextureRegion[] icons() {
+        return new TextureRegion[]{region, outRegion};
     }
 
     public boolean canProduce(Block block) {
@@ -83,23 +115,23 @@ public class PlanetaryPayloadLandingPad extends CargoLandingPad {
         addBar("payload", (PlanetaryPayloadLandingPadBuild build) -> new Bar(
                 () -> {
                     UnlockableContent config = build.payloadConfig();
-                    return config == null || build.stacks.total() <= 0 ? Iconc.cancel + "" : config.localizedName;
+                    return config == null || build.payload == null ? Iconc.cancel + "" : config.localizedName;
                 },
                 () -> {
                     UnlockableContent config = build.payloadConfig();
                     return config == null ? Color.clear : Pal.ammo;
                 },
-                () -> {
-                    UnlockableContent config = build.payloadConfig();
-                    return config == null ? 0f : (float) build.stacks.get(config) / stackCapacity;
-                }
+                () -> build.payload != null ? 1f : 0f
         ));
     }
 
     public class PlanetaryPayloadLandingPadBuild extends CargoLandingPadBuild {
         public Block configBlock;
         public UnitType unit;
-        public PayloadSeq stacks = new PayloadSeq();
+        public @Nullable Payload payload;
+        public @Nullable Vec2 commandPos;
+        public Vec2 payVector = new Vec2();
+        public float payRotation, scl;
 
         public boolean accessible() {
             return state.rules.editor || state.isCampaign() || team != state.rules.defaultTeam;
@@ -107,6 +139,22 @@ public class PlanetaryPayloadLandingPad extends CargoLandingPad {
 
         public @Nullable UnlockableContent payloadConfig() {
             return unit != null ? unit : configBlock;
+        }
+
+        public void clearOutputPayload() {
+            payload = null;
+            scl = 0f;
+            payVector.setZero();
+        }
+
+        @Override
+        public Vec2 getCommandPosition() {
+            return commandPos;
+        }
+
+        @Override
+        public void onCommand(Vec2 target) {
+            commandPos = target;
         }
 
         @Override
@@ -130,7 +178,7 @@ public class PlanetaryPayloadLandingPad extends CargoLandingPad {
             if (state.isCampaign() && lastUpdateId != state.updateId) {
                 lastUpdateId = state.updateId;
 
-                logistics().syncPayloadImportTimers(state.getPlanet(), landingBatch);
+                logistics().syncPayloadImportTimers(state.getPlanet(), 1);
 
                 waiting.each((content, pads) -> {
                     pads.removeAll(l -> l.payloadConfig() != content);
@@ -158,12 +206,22 @@ public class PlanetaryPayloadLandingPad extends CargoLandingPad {
 
                 if (arrivingTimer >= 1f) {
                     finishArrivalEffects();
-                    int room = stackCapacity - stacks.total();
-                    int amount = Math.min(landingBatch, room);
-                    if (amount > 0) {
-                        stacks.add(arrivingPayload, amount);
+                    if (arrivingPayload != null && payload == null) {
+                        payload = payloadOf(arrivingPayload);
+                        if (payload != null) {
+                            if (payload instanceof UnitPayload up) {
+                                Unit u = up.unit;
+                                if (commandPos != null && u.isCommandable()) {
+                                    u.command().commandPosition(commandPos);
+                                }
+                                Events.fire(new UnitCreateEvent(u, this));
+                            }
+                            payVector.setZero();
+                            payRotation = rotdeg();
+                            scl = 0f;
+                        }
                         if (!isFake()) {
-                            PlanetLogistics.handlePayloadImport(state.getPlanet(), arrivingPayload, amount);
+                            PlanetLogistics.handlePayloadImport(state.getPlanet(), arrivingPayload, 1);
                         }
                     }
                     arrivingPayload = null;
@@ -171,8 +229,8 @@ public class PlanetaryPayloadLandingPad extends CargoLandingPad {
                 }
             }
 
-            if (stacks.total() > 0) {
-                dumpStoredPayloads();
+            if (payload != null) {
+                updatePayloadOutput();
             }
 
             updateCooldown();
@@ -180,7 +238,7 @@ public class PlanetaryPayloadLandingPad extends CargoLandingPad {
             UnlockableContent config = payloadConfig();
             if (config != null && (isFake() || (state.isCampaign() && !legacyDisabled()))) {
                 PlanetLogisticsData data = logistics();
-                if (cooldown <= 0f && efficiency > 0f && stacks.total() < stackCapacity && !isLanding()
+                if (cooldown <= 0f && efficiency > 0f && payload == null && !isLanding()
                         && (isFake() || (data.getPayloadImportRate(state.getPlanet(), config) > 0f
                         && data.payloadImportTimer(config) >= 1f))) {
                     if (isFake()) {
@@ -192,33 +250,66 @@ public class PlanetaryPayloadLandingPad extends CargoLandingPad {
             }
         }
 
-        protected void dumpStoredPayloads() {
-            if (stacks.isEmpty() || isLanding()) return;
+        protected void updatePayloadOutput() {
+            if (isLanding() || payload == null) return;
 
-            UnlockableContent config = payloadConfig();
-            if (config != null && stacks.get(config) != stacks.total()) return;
-
-            UnlockableContent content = config;
-            if (content == null) {
-                if (configBlock != null && stacks.contains(configBlock)) content = configBlock;
-                else if (unit != null && stacks.contains(unit)) content = unit;
+            if (payVector.isZero(0.01f)) {
+                scl = 0f;
+            } else {
+                scl = Mathf.lerpDelta(scl, 1f, 0.1f);
             }
-            if (content == null || !stacks.contains(content)) return;
 
-            Payload payload = payloadOf(content);
-            if (payload == null) return;
+            float[] rot = {payRotation};
+            PayloadDirectedOutput.moveOutPayload(this, payload, payVector, rot, payloadSpeed, payloadRotateSpeed, this::releaseOutputPayload);
+            payRotation = rot[0];
+        }
 
-            if (dumpPayload(payload)) {
-                stacks.remove(content, 1);
-            } else if (payload instanceof UnitPayload up) {
-                up.unit.remove();
-            }
+        protected void releaseOutputPayload() {
+            payload = null;
         }
 
         protected Payload payloadOf(UnlockableContent content) {
             if (content instanceof Block b) return new BuildPayload(b, team);
             if (content instanceof UnitType type) return new UnitPayload(type.create(team));
             return null;
+        }
+
+        @Override
+        public void onRemoved() {
+            super.onRemoved();
+            if (payload != null) payload.dump();
+        }
+
+        @Override
+        public void draw() {
+            super.draw();
+
+            Draw.z(Layer.block);
+            if (outRegion.found()) Draw.rect(outRegion, x, y, rotdeg());
+
+            if (isLanding() && payloadConfig() != null) {
+                float fin = Mathf.clamp(arrivingTimer), fout = 1f - fin;
+                float alpha = Interp.pow5Out.apply(fin);
+                float scale = (1f - alpha) * 1.3f + 1f;
+                float cx = x;
+                float cy = y + Interp.pow4In.apply(fout) * (100f + Mathf.randomSeedRange(id() + 2, 30f));
+                float rotation = fout * (90f + Mathf.randomSeedRange(id(), 50f)) + rotdeg() - 90f;
+
+                TextureRegion icon = payloadConfig().fullIcon;
+                scale *= icon.scl();
+                float rw = icon.width * scale, rh = icon.height * scale;
+
+                Draw.color();
+                Draw.alpha(alpha);
+                Draw.z(Layer.weather - 1.01f);
+                Draw.rect(icon, cx, cy, rw, rh, rotation);
+            }
+
+            Draw.scl(scl);
+            if (payload != null) {
+                PayloadDirectedOutput.drawPayload(payload, payVector, payRotation, x, y);
+            }
+            Draw.reset();
         }
 
         @Override
@@ -267,26 +358,27 @@ public class PlanetaryPayloadLandingPad extends CargoLandingPad {
         }
 
         @Override
-        public byte version() {
-            return 1;
-        }
-
-        @Override
         public void write(Writes write) {
             super.write(write);
             write.s(unit == null ? -1 : unit.id);
             write.s(configBlock == null ? -1 : configBlock.id);
-            stacks.write(write);
+            TypeIO.writeVecNullable(write, commandPos);
+            TypeIO.writeVecNullable(write, payVector);
+            write.f(payRotation);
+            write.f(scl);
+            Payload.write(payload, write);
         }
 
         @Override
         public void read(Reads read, byte revision) {
             super.read(read, revision);
-            if (revision >= 1) {
-                unit = content.unit(read.s());
-                configBlock = content.block(read.s());
-            }
-            stacks.read(read);
+            unit = content.unit(read.s());
+            configBlock = content.block(read.s());
+            commandPos = TypeIO.readVecNullable(read);
+            payVector = TypeIO.readVecNullable(read);
+            payRotation = read.f();
+            scl = read.f();
+            payload = Payload.read(read);
         }
     }
 }

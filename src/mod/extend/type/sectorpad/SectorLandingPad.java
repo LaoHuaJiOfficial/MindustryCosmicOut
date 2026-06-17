@@ -15,6 +15,7 @@ import mindustry.graphics.Pal;
 import mindustry.type.Liquid;
 import mindustry.world.blocks.campaign.LandingPad;
 import mindustry.world.blocks.liquid.LiquidBlock;
+import mindustry.world.consumers.ConsumeLiquid;
 import mod.extend.sector.SectorLogistics;
 import mod.extend.sector.SectorLogisticsData;
 
@@ -23,6 +24,18 @@ import static mindustry.Vars.*;
 public class SectorLandingPad extends LandingPad {
     public SectorLandingPad(String name) {
         super(name);
+    }
+
+    @Override
+    public void init() {
+        super.init();
+        if (consumeLiquidAmount < 0) removeConsumers(c -> c instanceof ConsumeLiquid);
+    }
+
+    @Override
+    public void setBars() {
+        super.setBars();
+        if (consumeLiquidAmount < 0) removeBar("liquid-" + consumeLiquid.name);
     }
 
     public class SectorLandingPadBuild extends LandingPadBuild {
@@ -43,7 +56,7 @@ public class SectorLandingPad extends LandingPad {
 
         @Override
         public void draw() {
-            if (consumeLiquid != null) {
+            if (consumeLiquid != null && consumeLiquidAmount > 0f) {
                 Draw.color(bottomColor);
                 Fill.square(x, y, size * tilesize / 2f - liquidPad);
                 Draw.color();
@@ -91,6 +104,7 @@ public class SectorLandingPad extends LandingPad {
                 Drawf.shadow(x, y, size * tilesize, cooldown);
                 Draw.alpha(cooldown);
                 Draw.mixcol(Pal.accent, 1f - cooldown);
+                Draw.z(Layer.block + 0.01f);
                 Draw.rect(podRegion, x, y);
             }
 
@@ -121,9 +135,11 @@ public class SectorLandingPad extends LandingPad {
         protected void updateArrivalLiquidConsume() {
             arrivingTimer += Time.delta / arrivalDuration;
 
-            float toRemove = Math.min(consumeLiquidAmount / arrivalDuration * Time.delta, consumeLiquidAmount - liquidRemoved);
-            liquidRemoved += toRemove;
-            liquids.remove(consumeLiquid, toRemove);
+            if (consumeLiquidAmount > 0) {
+                float toRemove = Math.min(consumeLiquidAmount / arrivalDuration * Time.delta, consumeLiquidAmount - liquidRemoved);
+                liquidRemoved += toRemove;
+                liquids.remove(consumeLiquid, toRemove);
+            }
 
             if (Mathf.chanceDelta(coolingEffectChance * Interp.pow5Out.apply(arrivingTimer))) {
                 coolingEffect.at(this);
@@ -131,7 +147,9 @@ public class SectorLandingPad extends LandingPad {
         }
 
         protected void finishArrivalEffects() {
-            liquids.remove(consumeLiquid, consumeLiquidAmount - liquidRemoved);
+            if (consumeLiquidAmount > 0) {
+                liquids.remove(consumeLiquid, consumeLiquidAmount - liquidRemoved);
+            }
             landEffect.at(this);
             Effect.shake(3f, 3f, this);
         }

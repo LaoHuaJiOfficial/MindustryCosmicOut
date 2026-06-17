@@ -9,6 +9,7 @@ import arc.util.Nullable;
 import arc.util.io.Reads;
 import arc.util.io.Writes;
 import mindustry.game.EventType;
+import mindustry.gen.Building;
 import mindustry.gen.Call;
 import mindustry.io.TypeIO;
 import mindustry.type.Liquid;
@@ -136,6 +137,27 @@ public class LiquidLandingPad extends SectorLandingPad {
                         if (!pads.contains(this)) pads.add(this);
                     }
                 }
+            }
+        }
+
+        @Override
+        public void dumpLiquid(Liquid liquid, float scaling, int outputDir) {
+            if (liquids.get(liquid) <= 0.001f) return;
+
+            if (!net.client() && state.isCampaign() && team == state.rules.defaultTeam) {
+                liquid.unlock();
+            }
+
+            for (int i = 0; i < proximity.size; i++) {
+                incrementDump(proximity.size);
+                Building other = proximity.get((i + cdump) % proximity.size);
+                if (outputDir != -1 && (outputDir + rotation) % 4 != relativeTo(other)) continue;
+
+                other = other.getLiquidDestination(this, liquid);
+                if (other == null || !other.block.hasLiquids || other.liquids == null || !canDumpLiquid(other, liquid)) continue;
+
+                transferLiquid(other, liquids.get(liquid) / scaling, liquid);
+                if (liquids.get(liquid) <= 0.001f) break;
             }
         }
 
