@@ -17,17 +17,10 @@ public final class PayloadDirectedOutput {
     private PayloadDirectedOutput() {
     }
 
-    public static Vec2 payloadCenter(Building build) {
-        Tmp.v1.trns(build.rotdeg(), build.block.size * 8f / 2f);
-        return Tmp.v2.set(build.x + Tmp.v1.x, build.y + Tmp.v1.y);
-    }
-
     public static void yeetPayload(Building build, Payload payload) {
-        Vec2 spawn = payloadCenter(build).cpy();
+        Vec2 spawn = new Vec2(build.x, build.y);
         float rot = payload.angleTo(spawn);
-        Fx.shootPayloadDriver.at(payload.x(), payload.y(), rot);
         Fx.payloadDeposit.at(payload.x(), payload.y(), rot, new YeetData(spawn, payload.content()));
-        Sounds.shootPayload.at(build.x, build.y, 1f + Mathf.range(0.1f), 1f);
     }
 
     public static void updatePayload(Payload payload, Vec2 payVector, float payRotation, float x, float y) {
