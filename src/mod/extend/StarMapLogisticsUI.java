@@ -187,7 +187,7 @@ public class StarMapLogisticsUI {
             if (stat == null) continue;
             int total = (int) (stat.mean * 60);
             if (total <= 1) continue;
-            t.image(item.uiIcon).padRight(3);
+            t.image(item.uiIcon).scaling(Scaling.fit).padRight(3).size(iconSmall);
             t.add(UI.formatAmount(total) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(3);
             if (++i % 3 == 0) t.row();
         }
@@ -218,7 +218,7 @@ public class StarMapLogisticsUI {
             if (stat == null) continue;
             int total = (int) (stat.mean * 60);
             if (total <= 1) continue;
-            t.image(item.uiIcon).padRight(3);
+            t.image(item.uiIcon).scaling(Scaling.fit).padRight(3).size(iconSmall);
             t.add(UI.formatAmount(total) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(3);
             if (++i % 3 == 0) t.row();
         }
@@ -262,7 +262,7 @@ public class StarMapLogisticsUI {
         for (Item item : content.items()) {
             int total = (int) (data.getItemImportRate(planet, item) * 60);
             if (total <= 0) continue;
-            t.image(item.uiIcon).padRight(3);
+            t.image(item.uiIcon).scaling(Scaling.fit).padRight(3).size(iconSmall);
             t.add(UI.formatAmount(total) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(3);
             if (++i % 2 == 0) t.row();
         }
@@ -275,7 +275,7 @@ public class StarMapLogisticsUI {
         for (Liquid liquid : content.liquids()) {
             int total = (int) (data.getLiquidImportRate(planet, liquid) * 60);
             if (total <= 0) continue;
-            t.image(liquid.uiIcon).padRight(3);
+            t.image(liquid.uiIcon).scaling(Scaling.fit).padRight(3).size(iconSmall);
             t.add(UI.formatAmount(total) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(3);
             if (++i % 2 == 0) t.row();
         }
@@ -289,7 +289,7 @@ public class StarMapLogisticsUI {
         for (UnlockableContent content : data.payloadImportKeys) {
             int total = (int) (data.getPayloadImportRate(planet, content) * 60);
             if (total <= 0) continue;
-            t.image(content.uiIcon).padRight(3);
+            t.image(content.uiIcon).scaling(Scaling.fit).padRight(3).size(iconSmall);
             t.add(UI.formatAmount(total) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(3);
             if (++i % 2 == 0) t.row();
         }
@@ -302,7 +302,7 @@ public class StarMapLogisticsUI {
         for (Liquid liquid : content.liquids()) {
             int total = (int) (data.getLiquidImportRate(sector.planet, sector, liquid) * 60);
             if (total <= 0) continue;
-            t.image(liquid.uiIcon).padRight(3);
+            t.image(liquid.uiIcon).scaling(Scaling.fit).padRight(3).size(iconSmall);
             t.add(UI.formatAmount(total) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(3);
             if (++i % 2 == 0) t.row();
         }
@@ -316,7 +316,7 @@ public class StarMapLogisticsUI {
         for (UnlockableContent content : data.payloadImportKeys) {
             int total = (int) (data.getPayloadImportRate(sector.planet, sector, content) * 60);
             if (total <= 0) continue;
-            t.image(content.uiIcon).padRight(3);
+            t.image(content.uiIcon).scaling(Scaling.fit).padRight(3).size(iconSmall);
             t.add(UI.formatAmount(total) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(3);
             if (++i % 2 == 0) t.row();
         }
@@ -375,7 +375,7 @@ public class StarMapLogisticsUI {
             if (stat == null) continue;
             int total = (int) (stat.mean * 60);
             if (total <= 0) continue;
-            t.image(item.uiIcon).padRight(3);
+            t.image(item.uiIcon).scaling(Scaling.fit).padRight(3).size(iconSmall);
             t.add(UI.formatAmount(total) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(3);
             if (++i % 2 == 0) t.row();
         }
@@ -390,7 +390,7 @@ public class StarMapLogisticsUI {
             if (stat == null) continue;
             int total = (int) (stat.mean * 60);
             if (total <= 0) continue;
-            t.image(liquid.uiIcon).padRight(3);
+            t.image(liquid.uiIcon).scaling(Scaling.fit).padRight(3).size(iconSmall);
             t.add(UI.formatAmount(total) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(3);
             if (++i % 2 == 0) t.row();
         }
@@ -405,7 +405,7 @@ public class StarMapLogisticsUI {
             if (stat == null) continue;
             int total = (int) (stat.mean * 60);
             if (total <= 0) continue;
-            t.image(block.uiIcon).padRight(3);
+            t.image(block.uiIcon).scaling(Scaling.fit).padRight(3).size(iconSmall);
             t.add(UI.formatAmount(total) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(3);
             if (++i % 2 == 0) t.row();
         }
@@ -414,7 +414,7 @@ public class StarMapLogisticsUI {
             if (stat == null) continue;
             int total = (int) (stat.mean * 60);
             if (total <= 0) continue;
-            t.image(unit.uiIcon).padRight(3);
+            t.image(unit.uiIcon).scaling(Scaling.fit).padRight(3).size(iconSmall);
             t.add(UI.formatAmount(total) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(3);
             if (++i % 2 == 0) t.row();
         }

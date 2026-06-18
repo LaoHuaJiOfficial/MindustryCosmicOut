@@ -64,14 +64,15 @@ public class ModBlocks {
 
         itemCargoLaunchPad = new PlanetaryItemLaunchPad("item-cargo-launch-pad") {{
             requirements(Category.effect, BuildVisibility.shown, ItemStack.with());
-            size = 4;
+            size = 5;
             itemCapacity = 100;
+            launchTime = 60f * 20;
             alwaysUnlocked = true;
         }};
 
         liquidCargoLaunchPad = new PlanetaryLiquidLaunchPad("liquid-cargo-launch-pad") {{
             requirements(Category.effect, BuildVisibility.shown, ItemStack.with());
-            size = 4;
+            size = 5;
             liquidCapacity = 1200f;
             launchVolume = 1000f;
             alwaysUnlocked = true;
@@ -79,22 +80,21 @@ public class ModBlocks {
 
         payloadCargoLaunchPad = new PlanetaryPayloadLaunchPad("payload-cargo-launch-pad") {{
             requirements(Category.effect, BuildVisibility.shown, ItemStack.with());
-            size = 4;
+            size = 5;
             alwaysUnlocked = true;
         }};
 
         itemCargoLandingPad = new PlanetaryItemLandingPad("item-cargo-landing-pad") {{
             requirements(Category.effect, BuildVisibility.shown, ItemStack.with());
-            size = 4;
+            size = 5;
             itemCapacity = 100;
-            consumeLiquid = Liquids.water;
-            consumeLiquidAmount = 100f;
+            consumeLiquidAmount = -1;
             alwaysUnlocked = true;
         }};
 
         liquidCargoLandingPad = new PlanetaryLiquidLandingPad("liquid-cargo-landing-pad") {{
             requirements(Category.effect, BuildVisibility.shown, ItemStack.with());
-            size = 4;
+            size = 5;
             liquidCapacity = 1200f;
             landingVolume = 1000f;
             consumeLiquid = Liquids.water;
@@ -104,7 +104,7 @@ public class ModBlocks {
 
         payloadCargoLandingPad = new PlanetaryPayloadLandingPad("payload-cargo-landing-pad") {{
             requirements(Category.effect, BuildVisibility.shown, ItemStack.with());
-            size = 4;
+            size = 5;
             consumeLiquid = Liquids.water;
             consumeLiquidAmount = 100f;
             alwaysUnlocked = true;
