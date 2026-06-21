@@ -19,6 +19,7 @@ public class CosmicOut extends Mod{
     public CosmicOut(){
         Events.on(EventType.ModContentLoadEvent.class, e -> StarMapScanner.loadAll());
 
+        /*
         Events.on(EventType.ClientLoadEvent.class, evt -> {
             Vars.content.each(content -> {
                 if (content instanceof UnlockableContent unlockableContent) {
@@ -66,6 +67,8 @@ public class CosmicOut extends Mod{
                 r.infiniteResources = true;
             };
         });
+
+         */
     }
 
     @Override
