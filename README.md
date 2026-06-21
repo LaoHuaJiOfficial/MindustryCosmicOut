@@ -1,39 +1,85 @@
-# Mindustry Java Mod Template
-A Java Mindustry mod template that works on Android and PC. The Kotlin version of this mod can be seen [here](https://github.com/Anuken/MindustryKotlinModTemplate).
+# Cosmic Out
 
-## Building for Desktop Testing
+[中文 README](README.zh-CN.md)
 
-1. Install JDK **17**.
-2. Run `gradlew jar` [1].
-3. Your mod jar will be in the `build/libs` directory. **Only use this version for testing on desktop. It will not work with Android.**
-To build an Android-compatible version, you need the Android SDK. You can either let Github Actions handle this, or set it up yourself. See steps below.
+Mindustry Java library mod for campaign starmap, sector logistics, and planetary logistics. Blocks and sprites are defined by dependent mods, not shipped here.
 
-## Building through Github Actions
+- Min game version: `158` · Main class: `mod.CosmicOut` · Name: `cosmic-out`
+- Example mod: [`example/`](example/) (`cosmic-out-example`)
 
-This repository is set up with Github Actions CI to automatically build the mod for you every commit. This requires a Github repository, for obvious reasons.
-To get a jar file that works for every platform, do the following:
-1. Make a Github repository with your mod name, and upload the contents of this repo to it. Perform any modifications necessary, then commit and push. 
-2. Check the "Actions" tab on your repository page. Select the most recent commit in the list. If it completed successfully, there should be a download link under the "Artifacts" section. 
-3. Click the download link (should be the name of your repo). This will download a **zipped jar** - **not** the jar file itself [2]! Unzip this file and import the jar contained within in Mindustry. This version should work both on Android and Desktop.
+## Overview
 
-## Building Locally
+| System | Scope | Type prefix |
+|--------|-------|-------------|
+| Sector logistics | sector → sector (same planet) | `Item` / `Liquid` / `Payload` + `LaunchPad` / `LandingPad` |
+| Planetary logistics | planet → planet (starmap) | `Planetary` + same suffixes |
 
-Building locally takes more time to set up, but shouldn't be a problem if you've done Android development before.
-1. Download the Android SDK, unzip it and set the `ANDROID_HOME` environment variable to its location.
-2. Make sure you have API level 30 installed, as well as any recent version of build tools (e.g. 30.0.1)
-3. Add a build-tools folder to your PATH. For mod, if you have `30.0.1` installed, that would be `$ANDROID_HOME/build-tools/30.0.1`.
-4. Run `gradlew deploy`. If you did everything correctlly, this will create a jar file in the `build/libs` directory that can be run on both Android and desktop. 
+Also includes starmap UI, sector/planet logistics stats.
 
-## Adding Dependencies
+## Starmap
 
-Please note that all dependencies on Mindustry, Arc or its submodules **must be declared as compileOnly in Gradle**. Never use `implementation` for core Mindustry or Arc dependencies. 
+Place `starmap.hjson` in the mod root. All enabled mods are scanned on load by `StarMapScanner`.
 
-- `implementation` **places the entire dependency in the jar**, which is, in most mod dependencies, very undesirable. You do not want the entirety of the Mindustry API included with your mod.
-- `compileOnly` means that the dependency is only around at compile time, and not included in the jar.
+```hjson
+planets: [
+  { name: sun, axis0: 0, axis120: 0 }
+  { name: erekir, axis0: 2, axis120: 0 }
+  { name: gier, axis0: 2, axis120: 3, size: 16 }
+]
+```
 
-Only use `implementation` if you want to package another Java library *with your mod*, and that library is not present in Mindustry already.
+| Field | Default | Description |
+|-------|---------|-------------|
+| `name` | — | Planet content ID (must exist in game) |
+| `axis0` | `0` | Hex coordinate, axis 0 |
+| `axis120` | `0` | Hex coordinate, 120° axis (third axis = `-(axis0 + axis120)`) |
+| `size` | `1.5` | Display size on starmap |
 
---- 
+Unknown planets are skipped. Duplicate entries for the same planet are overwritten by later mods. Planets not on the starmap cannot be used as `Planetary*` destinations.
 
-*[1]* *On Linux/Mac it's `./gradlew`, but if you're using Linux I assume you know how to run executables properly anyway.*  
-*[2]: Yes, I know this is stupid. It's a Github UI limitation - while the jar itself is uploaded unzipped, there is currently no way to download it as a single file.*
+Example: [`example/starmap.hjson`](example/starmap.hjson)
+
+## Block Types
+
+Add `dependencies: [cosmic-out]` in `mod.hjson`. Examples: [`example/content/blocks/`](example/content/blocks/). All twelve types are registered in `ClassMapRegister`.
+
+### Sector (6)
+
+Launch pads target a `Sector`; landing pads receive from other sectors.
+
+| type | New fields |
+|------|------------|
+| `ItemLaunchPad` | `maxPath` |
+| `ItemLandingPad` | — |
+| `LiquidLaunchPad` | `maxPath`, `launchVolume` |
+| `LiquidLandingPad` | `landingVolume` |
+| `PayloadLaunchPad` | `maxPath`, `payloadCapacity`, `payloadLaunchCount` |
+| `PayloadLandingPad` | `payloadSpeed`, `payloadRotateSpeed` |
+
+### Planetary (6)
+
+Launch pads target a `Planet`; landing pads receive from other planets.
+
+| type | New fields |
+|------|------------|
+| `PlanetaryItemLaunchPad` | `maxPath` |
+| `PlanetaryItemLandingPad` | — |
+| `PlanetaryLiquidLaunchPad` | `maxPath`, `launchVolume` |
+| `PlanetaryLiquidLandingPad` | `landingVolume` |
+| `PlanetaryPayloadLaunchPad` | `maxPath`, `payloadCapacity`, `payloadLaunchCount` |
+| `PlanetaryPayloadLandingPad` | `payloadSpeed`, `payloadRotateSpeed` |
+
+### Field defaults
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `maxPath` | `0` | Max path length (`0` = no limit display); used for path validation when > 0 |
+| `launchVolume` | `100` | Liquid volume per launch |
+| `landingVolume` | `100` | Liquid volume per landing |
+| `payloadCapacity` | `1` | Max payloads held |
+| `payloadLaunchCount` | `1` | Payloads launched at once |
+| `payloadSpeed` | `0.7` | Landing pad output speed |
+| `payloadRotateSpeed` | `5` | Landing pad output rotation speed |
+| `consumeLiquidAmount` | vanilla | Set to `-1` on landing pads to disable landing liquid consumption |
+
+Vanilla `LaunchPad` / `LandingPad` fields still apply. Payload blocks need sprites (`-pod`, `-preview`, `-light`, `-in`, `-out`); see [`example/sprites/`](example/sprites/).
