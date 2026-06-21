@@ -14,7 +14,7 @@ main: "mod.CosmicOut"
 description: "A Mindustry lib mod that adds support for starmap, more sector logistics and planetary logistics."
 
 #the mod version
-version: "1.0"
+version: "1.0.0"
 
 #the minimum game build required to run this mod
 minGameVersion: 158
