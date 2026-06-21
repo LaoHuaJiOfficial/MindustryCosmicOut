@@ -1,0 +1,8 @@
+type: ItemLandingPad
+category: effect
+buildVisibility: notLegacyLaunchPadOnly
+requirements: []
+size: 3
+itemCapacity: 120
+consumeLiquidAmount: -1
+alwaysUnlocked: true

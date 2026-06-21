@@ -19,6 +19,11 @@ public class StarMapPlanets {
     }
 
     public static StarMapPlanetData register(Planet planet, int axis0, int axis120, float starmapSize) {
+        StarMapPlanetData existing = byPlanet.get(planet);
+        if (existing != null) {
+            all.remove(existing);
+        }
+
         StarMapPlanetData data = new StarMapPlanetData(planet, axis0, axis120, starmapSize);
         all.add(data);
         byPlanet.put(planet, data);

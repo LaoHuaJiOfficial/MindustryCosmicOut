@@ -22,6 +22,7 @@ public class PlanetLogisticsData {
     private static final float refreshPeriod = 60f;
 
     public @Nullable String destination;
+
     public ItemSeq items = new ItemSeq();
     public ObjectMap<String, PlanetSectorLogisticsData> sectors = new ObjectMap<>();
 
@@ -45,12 +46,22 @@ public class PlanetLogisticsData {
         sectors.each((id, data) -> cons.get(data));
     }
 
-    public @Nullable Planet destinationPlanet() {
-        return destination == null ? null : content.planet(destination);
+    public @Nullable Planet destinationPlanet(Sector sector) {
+        return getSector(sector).destinationPlanet();
     }
 
-    public void setDestination(@Nullable Planet planet) {
-        destination = planet == null ? null : planet.name;
+    public void setDestination(Sector sector, @Nullable Planet planet) {
+        getSector(sector).setDestination(planet);
+    }
+
+    public void migrateLegacyDestination(Planet planet) {
+        if (destination == null) return;
+        Planet dest = content.planet(destination);
+        destination = null;
+        if (dest == null) return;
+        for (Sector sector : planet.sectors) {
+            if (sector.hasBase()) getSector(sector).setDestination(dest);
+        }
     }
 
     public void handleItemExport(Sector sector, Item item, int amount) {
@@ -75,6 +86,58 @@ public class PlanetLogisticsData {
 
     public void handlePayloadImport(Sector sector, UnlockableContent content, int amount) {
         getSector(sector).handlePayloadImport(content, amount);
+    }
+
+    public float getItemExportTo(Item item, Planet dest) {
+        float[] total = {0f};
+        sectors.each((id, data) -> {
+            if (data.destinationPlanet() == dest) total[0] += data.getItemExport(item);
+        });
+        return total[0];
+    }
+
+    public float getLiquidExportTo(Liquid liquid, Planet dest) {
+        float[] total = {0f};
+        sectors.each((id, data) -> {
+            if (data.destinationPlanet() == dest) total[0] += data.getLiquidExport(liquid);
+        });
+        return total[0];
+    }
+
+    public float getPayloadExportTo(UnlockableContent content, Planet dest) {
+        float[] total = {0f};
+        sectors.each((id, data) -> {
+            if (data.destinationPlanet() == dest) total[0] += data.getPayloadExport(content);
+        });
+        return total[0];
+    }
+
+    public boolean anyItemExportsTo(Planet dest) {
+        boolean[] found = {false};
+        sectors.each((id, data) -> {
+            if (data.destinationPlanet() == dest && data.anyItemExports()) found[0] = true;
+        });
+        return found[0];
+    }
+
+    public boolean anyLiquidExportsTo(Planet dest) {
+        boolean[] found = {false};
+        sectors.each((id, data) -> {
+            if (data.destinationPlanet() == dest && data.anyLiquidExports()) found[0] = true;
+        });
+        return found[0];
+    }
+
+    public boolean anyPayloadExportsTo(Planet dest) {
+        boolean[] found = {false};
+        sectors.each((id, data) -> {
+            if (data.destinationPlanet() == dest && data.anyPayloadExports()) found[0] = true;
+        });
+        return found[0];
+    }
+
+    public boolean anyExportsTo(Planet dest) {
+        return anyItemExportsTo(dest) || anyLiquidExportsTo(dest) || anyPayloadExportsTo(dest);
     }
 
     public float getItemExport(Item item) {
@@ -152,7 +215,10 @@ public class PlanetLogisticsData {
 
         eachItemSource(self, source -> {
             PlanetLogisticsData data = PlanetLogistics.get(source);
-            data.eachSector(sectorData -> sectorData.itemExport.each((item, stat) -> itemImportRateCache[item.id] += stat.mean));
+            data.sectors.each((id, sectorData) -> {
+                if (sectorData.destinationPlanet() != self) return;
+                sectorData.itemExport.each((item, stat) -> itemImportRateCache[item.id] += stat.mean);
+            });
         });
     }
 
@@ -165,7 +231,10 @@ public class PlanetLogisticsData {
 
         eachLiquidSource(self, source -> {
             PlanetLogisticsData data = PlanetLogistics.get(source);
-            data.eachSector(sectorData -> sectorData.liquidExport.each((liquid, stat) -> liquidImportRateCache[liquid.id] += stat.mean));
+            data.sectors.each((id, sectorData) -> {
+                if (sectorData.destinationPlanet() != self) return;
+                sectorData.liquidExport.each((liquid, stat) -> liquidImportRateCache[liquid.id] += stat.mean);
+            });
         });
     }
 
@@ -175,10 +244,13 @@ public class PlanetLogisticsData {
 
         eachPayloadSource(self, source -> {
             PlanetLogisticsData data = PlanetLogistics.get(source);
-            data.eachSector(sectorData -> sectorData.payloadExport.each((content, stat) -> {
-                payloadImportRateCache.increment(content, 0f, stat.mean);
-                if (!payloadImportKeys.contains(content)) payloadImportKeys.add(content);
-            }));
+            data.sectors.each((id, sectorData) -> {
+                if (sectorData.destinationPlanet() != self) return;
+                sectorData.payloadExport.each((content, stat) -> {
+                    payloadImportRateCache.increment(content, 0f, stat.mean);
+                    if (!payloadImportKeys.contains(content)) payloadImportKeys.add(content);
+                });
+            });
         });
     }
 
@@ -203,7 +275,7 @@ public class PlanetLogisticsData {
         for (Planet planet : content.planets()) {
             if (planet == self || !PlanetLogistics.hasBase(planet)) continue;
             PlanetLogisticsData data = PlanetLogistics.get(planet);
-            if (data.destinationPlanet() == self && data.anyItemExports()) cons.get(planet);
+            if (data.anyItemExportsTo(self)) cons.get(planet);
         }
     }
 
@@ -211,7 +283,7 @@ public class PlanetLogisticsData {
         for (Planet planet : content.planets()) {
             if (planet == self || !PlanetLogistics.hasBase(planet)) continue;
             PlanetLogisticsData data = PlanetLogistics.get(planet);
-            if (data.destinationPlanet() == self && data.anyLiquidExports()) cons.get(planet);
+            if (data.anyLiquidExportsTo(self)) cons.get(planet);
         }
     }
 
@@ -219,7 +291,7 @@ public class PlanetLogisticsData {
         for (Planet planet : content.planets()) {
             if (planet == self || !PlanetLogistics.hasBase(planet)) continue;
             PlanetLogisticsData data = PlanetLogistics.get(planet);
-            if (data.destinationPlanet() == self && data.anyPayloadExports()) cons.get(planet);
+            if (data.anyPayloadExportsTo(self)) cons.get(planet);
         }
     }
 
@@ -333,8 +405,7 @@ public class PlanetLogisticsData {
     private boolean anyPayloadSources(Planet self) {
         for (Planet planet : content.planets()) {
             if (planet == self || !PlanetLogistics.hasBase(planet)) continue;
-            PlanetLogisticsData data = PlanetLogistics.get(planet);
-            if (data.destinationPlanet() == self && data.anyPayloadExports()) return true;
+            if (PlanetLogistics.get(planet).anyPayloadExportsTo(self)) return true;
         }
         return false;
     }

@@ -8,6 +8,8 @@ import mindustry.gen.Building;
 import mindustry.io.TypeIO;
 import mindustry.type.Liquid;
 import mindustry.world.blocks.ItemSelection;
+import mindustry.world.meta.StatUnit;
+import mod.content.ModStats;
 
 import static mindustry.Vars.*;
 
@@ -33,6 +35,12 @@ public abstract class LiquidLaunchPadBase extends ModLaunchPad {
 
     protected boolean acceptLiquidConfig(Liquid liquid) {
         return true;
+    }
+
+    @Override
+    public void setStats() {
+        super.setStats();
+        stats.add(ModStats.launchVolume, launchVolume, StatUnit.liquidUnits);
     }
 
     @Override
@@ -83,6 +91,11 @@ public abstract class LiquidLaunchPadBase extends ModLaunchPad {
 
             table.row();
             buildDestinationConfig(table);
+        }
+
+        @Override
+        public void drawSelect() {
+            drawItemSelection(liquidConfig);
         }
 
         @Override

@@ -15,12 +15,18 @@ public class CargoLaunchPad extends ModLaunchPad {
 
     public class CargoLaunchPadBuild extends ModLaunchPadBuild {
         protected @Nullable Planet destination() {
-            return state.isCampaign() ? PlanetLogistics.get(state.getPlanet()).destinationPlanet() : null;
+            return state.isCampaign() && state.rules.sector != null
+                    ? PlanetLogistics.get(state.getPlanet()).destinationPlanet(state.rules.sector) : null;
+        }
+
+        @Override
+        protected Object logisticsDestination() {
+            return destination();
         }
 
         @Override
         protected void buildDestinationConfig(Table table) {
-            CargoPadDestination.addConfigButton(table, this::deselect);
+            CargoPadDestination.addConfigButton(table, (ModLaunchPad) block, this::deselect);
         }
 
         @Override

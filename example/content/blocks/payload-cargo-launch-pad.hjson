@@ -1,0 +1,8 @@
+type: PlanetaryPayloadLaunchPad
+category: effect
+buildVisibility: shown
+requirements: []
+size: 5
+maxPath: 8
+alwaysUnlocked: true
+envEnabled: -1

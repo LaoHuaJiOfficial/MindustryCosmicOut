@@ -21,6 +21,9 @@ import mindustry.type.UnitType;
 import mindustry.ui.Bar;
 import mindustry.world.Block;
 import mindustry.world.blocks.ItemSelection;
+import mindustry.world.meta.Stat;
+import mindustry.world.meta.StatUnit;
+import mod.content.ModStats;
 import mindustry.world.blocks.liquid.LiquidBlock;
 import mindustry.world.blocks.payloads.BuildPayload;
 import mindustry.world.blocks.payloads.Payload;
@@ -92,6 +95,13 @@ public abstract class PayloadLaunchPadBase extends ModLaunchPad {
 
     public boolean canProduce(UnitType unit) {
         return !unit.isHidden() && !unit.isBanned() && unit.supportsEnv(state.rules.env);
+    }
+
+    @Override
+    public void setStats() {
+        super.setStats();
+        stats.add(Stat.payloadCapacity, payloadCapacity, StatUnit.none);
+        stats.add(ModStats.payloadLaunchCount, payloadLaunchCount, StatUnit.none);
     }
 
     @Override
@@ -239,6 +249,11 @@ public abstract class PayloadLaunchPadBase extends ModLaunchPad {
 
             table.row();
             buildDestinationConfig(table);
+        }
+
+        @Override
+        public void drawSelect() {
+            drawItemSelection(payloadConfig());
         }
 
         @Override

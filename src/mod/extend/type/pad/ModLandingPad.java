@@ -4,6 +4,8 @@ import arc.graphics.g2d.Draw;
 import arc.graphics.g2d.Fill;
 import arc.math.Interp;
 import arc.math.Mathf;
+import arc.scene.ui.layout.Table;
+import arc.util.Nullable;
 import arc.util.Time;
 import arc.util.Tmp;
 import mindustry.content.Fx;
@@ -16,6 +18,7 @@ import mindustry.type.Liquid;
 import mindustry.world.blocks.campaign.LandingPad;
 import mindustry.world.blocks.liquid.LiquidBlock;
 import mindustry.world.consumers.ConsumeLiquid;
+import mindustry.world.meta.Stat;
 
 import static mindustry.Vars.*;
 
@@ -28,6 +31,14 @@ public abstract class ModLandingPad extends LandingPad {
     public void init() {
         super.init();
         if (consumeLiquidAmount < 0) removeConsumers(c -> c instanceof ConsumeLiquid);
+    }
+
+    @Override
+    public void setStats() {
+        super.setStats();
+        if (consumeLiquidAmount < 0) {
+            stats.remove(Stat.input);
+        }
     }
 
     @Override
@@ -153,6 +164,21 @@ public abstract class ModLandingPad extends LandingPad {
                 cooldown -= delta() / cooldownTime;
                 cooldown = Mathf.clamp(cooldown);
             }
+        }
+
+        protected @Nullable String buildImportDisplayLabel() {
+            return null;
+        }
+
+        @Override
+        public void display(Table table) {
+            PadDisplayUI.invokeBuildingDisplay(this, table);
+            if (!PadDisplayUI.shouldShowCampaignLogistics(this)) return;
+            if (legacyDisabled()) {
+                PadDisplayUI.appendInfoRow(table, PadDisplayUI.legacyDisabledLabel());
+                return;
+            }
+            PadDisplayUI.appendInfoRow(table, buildImportDisplayLabel());
         }
     }
 }

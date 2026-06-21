@@ -1,0 +1,10 @@
+type: LiquidLandingPad
+category: effect
+buildVisibility: notLegacyLaunchPadOnly
+requirements: []
+size: 3
+liquidCapacity: 1200
+landingVolume: 1000
+consumeLiquid: water
+consumeLiquidAmount: -1
+alwaysUnlocked: true

@@ -6,16 +6,18 @@ import arc.scene.ui.layout.Table;
 import arc.struct.ObjectMap;
 import arc.struct.Seq;
 import arc.util.Scaling;
+import arc.util.Nullable;
 import mindustry.core.UI;
 import mindustry.ctype.UnlockableContent;
 import mindustry.game.SectorInfo.ExportStat;
 import mindustry.gen.Iconc;
 import mindustry.type.Item;
-import mindustry.type.ItemStack;
+import mindustry.type.ItemSeq;
 import mindustry.type.Liquid;
 import mindustry.type.Planet;
 import mindustry.type.Sector;
 import mindustry.type.UnitType;
+import mindustry.ui.Styles;
 import mindustry.world.Block;
 import mod.extend.sector.FlowStat;
 import mod.extend.sector.PlanetLogistics;
@@ -66,6 +68,17 @@ public class StarMapLogisticsUI {
 
         SectorLogistics.flushStats(sector);
         SectorLogistics.refreshImportRates(sector.planet, sector);
+        if (hasSectorLogisticsContent(sector)) {
+            borderedTable(c, t -> buildSectorLogisticsContent(t, sector));
+        }
+
+        if (PlanetLogistics.hasBase(sector.planet) && hasPlanetLogisticsContent(sector.planet)) {
+            c.add("[accent]" + sector.planet.localizedName).padTop(8f).left().row();
+            buildPlanetLogisticsStats(c, sector.planet, true, sector);
+        }
+    }
+
+    static void buildSectorLogisticsContent(Table c, Sector sector) {
         SectorLogisticsData data = SectorLogistics.get(sector);
 
         displayExportStats(c, sector.info.production, "@sectors.production");
@@ -73,52 +86,39 @@ public class StarMapLogisticsUI {
         Table itemExportTable = buildItemExportTable(sector.info.export);
         boolean hasLogisticsExport = hasSectorExport(data);
         if (itemExportTable != null || hasLogisticsExport) {
-            c.add("@sectors.export").left().row();
-            if (sector.info.destination != null && sector.info.destination.hasBase()) {
-                c.add(formatSectorLink(sector.info.destination)).padLeft(10f).left().row();
-            }
-            if (itemExportTable != null) {
-                c.add(itemExportTable).padLeft(10f).row();
-            }
-            if (hasLogisticsExport) {
-                addLiquidFlows(c, data.liquidExport);
-                addPayloadFlows(c, data.payloadExport);
-            }
+            appendSectionHeader(c, "@sectors.export", sector.info.destination != null && sector.info.destination.hasBase()
+                    ? formatSectorLink(sector.info.destination) : null);
+            Table flows = buildSectorExportFlowTable(sector.info.export, data);
+            if (flows != null) c.add(flows).padLeft(4f).left().row();
         }
 
         Table itemImportTable = buildItemExportTable(sector.info.imports);
         boolean hasLogisticsImport = sector.hasBase() && data.anyIncomingImports(sector.planet, sector);
         boolean hasItemImport = sector.hasBase() && itemImportTable != null;
         if (hasItemImport || hasLogisticsImport) {
-            c.add("@sectors.import").left().row();
-            appendMergedSectorImportSources(c, sector, hasItemImport, hasLogisticsImport);
-            if (itemImportTable != null) {
-                c.add(itemImportTable).padLeft(10f).row();
+            Seq<Sector> sources = collectSectorImportSources(sector, hasItemImport, hasLogisticsImport);
+            String route = sources.size == 1 ? formatImportSectorLink(sources.first()) : null;
+            appendSectionHeader(c, "@sectors.import", route);
+            if (sources.size > 1) {
+                for (Sector source : sources) {
+                    c.add(formatImportSectorLink(source)).padLeft(4f).left().row();
+                }
             }
-            if (hasLogisticsImport) {
-                addSectorLiquidImportFlows(c, sector, data);
-                addSectorPayloadImportFlows(c, sector, data);
-            }
+            Table flows = buildSectorImportFlowTable(sector.info.imports, sector, data, hasLogisticsImport);
+            if (flows != null) c.add(flows).padLeft(4f).left().row();
         }
 
         var items = sector.items();
         if (sector.hasBase() && items.total > 0) {
-            c.add("@sectors.stored").left().row();
-            c.table(t -> {
-                t.left();
-                t.table(res -> {
-                    int i = 0;
-                    for (ItemStack stack : items) {
-                        res.image(stack.item.uiIcon).padRight(3);
-                        res.add(UI.formatAmount(Math.max(stack.amount, 0))).color(Color.lightGray);
-                        if (++i % 4 == 0) res.row();
-                    }
-                }).padLeft(10f);
-            }).left().row();
+            appendStoredItems(c, items);
         }
     }
 
     public static void buildPlanetLogisticsStats(Table c, Planet planet) {
+        buildPlanetLogisticsStats(c, planet, false, null);
+    }
+
+    static void buildPlanetLogisticsStats(Table c, Planet planet, boolean embedded, @Nullable Sector contextSector) {
         c.defaults().left().padBottom(4);
 
         PlanetLogistics.refreshImportRates(planet);
@@ -126,57 +126,94 @@ public class StarMapLogisticsUI {
 
         if (hasPlanetExport(data, planet)) {
             c.add("@sectors.export").left().row();
-            appendPlanetDestination(c, planet);
-
             for (Sector sector : planet.sectors) {
                 if (!sector.hasBase()) continue;
                 PlanetSectorLogisticsData sectorData = data.getSector(sector);
-                if (!hasPlanetSectorExport(sectorData)) continue;
-                appendSectorHeader(c, sector);
-                addItemFlows(c, sectorData.itemExport);
-                addLiquidFlows(c, sectorData.liquidExport);
-                addPayloadFlows(c, sectorData.payloadExport);
+                Planet dest = data.destinationPlanet(sector);
+                boolean hasExport = hasPlanetSectorExport(sectorData);
+                if (!hasExport) continue;
+                borderedTable(c, t -> {
+                    appendSectorExportHeader(t, sector, dest, contextSector);
+                    addAllFlows(t, sectorData.itemExport, sectorData.liquidExport, sectorData.payloadExport);
+                });
             }
         }
 
         if (PlanetLogistics.hasBase(planet) && data.anyIncomingImports(planet)) {
             c.add("@sectors.import").left().row();
-            appendPlanetImportSources(c, planet);
-
-            boolean hasSectorImport = false;
-            for (Sector sector : planet.sectors) {
-                if (!sector.hasBase()) continue;
-                PlanetSectorLogisticsData sectorData = data.getSector(sector);
-                if (!hasPlanetSectorImport(sectorData)) continue;
-                hasSectorImport = true;
-                appendSectorHeader(c, sector);
-                addItemFlows(c, sectorData.itemImport);
-                addLiquidFlows(c, sectorData.liquidImport);
-                addPayloadFlows(c, sectorData.payloadImport);
-            }
-
-            if (!hasSectorImport) {
-                addPlanetItemImportFlows(c, planet, data);
-                addPlanetLiquidImportFlows(c, planet, data);
-                addPlanetPayloadImportFlows(c, planet, data);
-            }
+            appendPlanetImportBySource(c, planet);
         }
 
-        if (PlanetLogistics.hasBase(planet) && data.items.total > 0) {
-            c.add("@sectors.stored").left().row();
-            c.table(t -> {
-                t.left();
-                t.table(res -> {
-                    int[] i = {0};
-                    data.items.each((item, amount) -> {
-                        if (amount <= 0) return;
-                        res.image(item.uiIcon).padRight(3);
-                        res.add(UI.formatAmount(amount)).color(Color.lightGray);
-                        if (++i[0] % 3 == 0) res.row();
-                    });
-                }).padLeft(10f);
-            }).left().row();
+        if (!embedded) {
+            ItemSeq stored = collectPlanetItems(planet);
+            if (PlanetLogistics.hasBase(planet) && stored.total > 0) {
+                appendPlanetStoredItems(c, stored);
+            }
         }
+    }
+
+    static void appendSectionHeader(Table c, String label, String route) {
+        c.table(t -> {
+            t.left().defaults().left();
+            t.add(label).left();
+            if (route != null) t.add(route).padLeft(6f).left();
+        }).left().row();
+    }
+
+    static void appendStoredItems(Table c, ItemSeq items) {
+        c.add("@sectors.stored").padTop(2f).left().row();
+        Table stored = buildStoredTable(items);
+        if (stored != null) c.add(stored).padLeft(4f).left().row();
+    }
+
+    static void appendPlanetStoredItems(Table c, ItemSeq items) {
+        c.add("@sectors.stored").left().row();
+        Table stored = buildStoredTable(items);
+        if (stored != null) borderedTable(c, t -> t.add(stored).padLeft(4f).left());
+    }
+
+    static ItemSeq collectPlanetItems(Planet planet) {
+        ItemSeq total = new ItemSeq();
+        if (planet == null) return total;
+        for (Sector sector : planet.sectors) {
+            if (!sector.hasBase() || sector.isFrozen()) continue;
+            sector.items().each((item, amount) -> {
+                int value = Math.max(amount, 0);
+                if (value > 0) total.add(item, value);
+            });
+        }
+        return total;
+    }
+
+    static Seq<Sector> collectSectorImportSources(Sector sector, boolean hasItemImport, boolean hasLogisticsImport) {
+        Seq<Sector> shown = new Seq<>();
+        if (hasItemImport) {
+            sector.info.eachImport(sector.planet, other -> addSectorImportSource(shown, other, sector));
+        }
+        if (hasLogisticsImport) {
+            SectorLogisticsData data = SectorLogistics.get(sector);
+            data.eachLiquidSource(sector.planet, sector, s -> addSectorImportSource(shown, s, sector));
+            data.eachPayloadSource(sector.planet, sector, s -> addSectorImportSource(shown, s, sector));
+        }
+        return shown;
+    }
+
+    static void addSectorImportSource(Seq<Sector> shown, Sector source, Sector self) {
+        if (source == self || source == null || shown.contains(source)) return;
+        shown.add(source);
+    }
+
+    static Table buildStoredTable(ItemSeq items) {
+        Table res = new Table().left();
+        int i = 0;
+        for (Item item : content.items()) {
+            int amount = items.get(item);
+            if (amount <= 0) continue;
+            res.image(item.uiIcon).scaling(Scaling.fit).padRight(2).size(iconSmall);
+            res.add(UI.formatAmount(amount)).color(Color.lightGray).padRight(6f).left();
+            if (++i % 4 == 0) res.row();
+        }
+        return res.getChildren().any() ? res : null;
     }
 
     static Table buildItemExportTable(ObjectMap<Item, ExportStat> stats) {
@@ -192,18 +229,6 @@ public class StarMapLogisticsUI {
             if (++i % 3 == 0) t.row();
         }
         return t.getChildren().any() ? t : null;
-    }
-
-    static void appendMergedSectorImportSources(Table c, Sector sector, boolean hasItemImport, boolean hasLogisticsImport) {
-        Seq<Sector> shown = new Seq<>();
-        if (hasItemImport) {
-            sector.info.eachImport(sector.planet, other -> addSectorImportSource(shown, c, other));
-        }
-        if (hasLogisticsImport) {
-            SectorLogisticsData data = SectorLogistics.get(sector);
-            data.eachLiquidSource(sector.planet, sector, s -> addSectorImportSource(shown, c, s));
-            data.eachPayloadSource(sector.planet, sector, s -> addSectorImportSource(shown, c, s));
-        }
     }
 
     static void displayExportStats(Table c, ObjectMap<Item, ExportStat> stats, String name) {
@@ -225,9 +250,9 @@ public class StarMapLogisticsUI {
 
         if (t.getChildren().any()) {
             c.defaults().left();
-            c.add(name).row();
+            c.add(name).left().row();
             builder.get(c);
-            c.add(t).padLeft(10f).row();
+            c.add(t).padLeft(4f).left().row();
         }
     }
 
@@ -246,81 +271,112 @@ public class StarMapLogisticsUI {
         return hasFlow(data.itemExport) || hasFlow(data.liquidExport) || hasFlow(data.payloadExport);
     }
 
-    static boolean hasPlanetSectorImport(PlanetSectorLogisticsData data) {
-        return hasFlow(data.itemImport) || hasFlow(data.liquidImport) || hasFlow(data.payloadImport);
+    static void appendPlanetImportBySource(Table c, Planet planet) {
+        forEachImportSourcePlanet(planet, source -> {
+            if (countSectorsWithBase(source) > 1) {
+                for (Sector sourceSector : exportingSectors(source, planet)) {
+                    PlanetSectorLogisticsData sectorData = PlanetLogistics.get(source).getSector(sourceSector);
+                    borderedTable(c, t -> {
+                        t.add(formatImportPlanetSectorLink(source, sourceSector)).padLeft(4f).left().row();
+                        addAllFlows(t, sectorData.itemExport, sectorData.liquidExport, sectorData.payloadExport);
+                    });
+                }
+            } else {
+                borderedTable(c, t -> {
+                    t.add(formatImportPlanetLink(source)).padLeft(4f).left().row();
+                    appendSourcePlanetExportFlows(t, source, planet);
+                });
+            }
+        });
+    }
+
+    static void forEachImportSourcePlanet(Planet self, arc.func.Cons<Planet> cons) {
+        Seq<Planet> shown = new Seq<>();
+        PlanetLogisticsData data = PlanetLogistics.get(self);
+        data.eachItemSource(self, p -> addImportSourcePlanet(shown, p, cons));
+        data.eachLiquidSource(self, p -> addImportSourcePlanet(shown, p, cons));
+        data.eachPayloadSource(self, p -> addImportSourcePlanet(shown, p, cons));
+    }
+
+    static void addImportSourcePlanet(Seq<Planet> shown, Planet source, arc.func.Cons<Planet> cons) {
+        if (shown.contains(source)) return;
+        shown.add(source);
+        cons.get(source);
+    }
+
+    static int countSectorsWithBase(Planet planet) {
+        int count = 0;
+        for (Sector sector : planet.sectors) {
+            if (sector.hasBase()) count++;
+        }
+        return count;
+    }
+
+    static Seq<Sector> exportingSectors(Planet source, Planet dest) {
+        Seq<Sector> result = new Seq<>();
+        PlanetLogisticsData data = PlanetLogistics.get(source);
+        for (Sector sector : source.sectors) {
+            if (!sector.hasBase()) continue;
+            PlanetSectorLogisticsData sectorData = data.getSector(sector);
+            if (sectorData.destinationPlanet() != dest || !hasPlanetSectorExport(sectorData)) continue;
+            result.add(sector);
+        }
+        return result;
+    }
+
+    static void appendSourcePlanetExportFlows(Table t, Planet source, Planet dest) {
+        PlanetLogisticsData data = PlanetLogistics.get(source);
+        ObjectMap<Item, FlowStat> items = new ObjectMap<>();
+        ObjectMap<Liquid, FlowStat> liquids = new ObjectMap<>();
+        ObjectMap<UnlockableContent, FlowStat> payloads = new ObjectMap<>();
+        for (Sector sector : source.sectors) {
+            if (!sector.hasBase()) continue;
+            PlanetSectorLogisticsData sectorData = data.getSector(sector);
+            if (sectorData.destinationPlanet() != dest) continue;
+            mergeFlowMap(items, sectorData.itemExport);
+            mergeFlowMap(liquids, sectorData.liquidExport);
+            mergeFlowMap(payloads, sectorData.payloadExport);
+        }
+        addAllFlows(t, items, liquids, payloads);
     }
 
     static void appendSectorHeader(Table c, Sector sector) {
         String ic = sector.iconChar();
         String prefix = ic == null || ic.isEmpty() ? "" : ic + " ";
-        c.add("[lightgray]" + prefix + sector.name()).padLeft(6f).left().row();
+        c.add("[lightgray]" + prefix + sector.name()).left().row();
     }
 
-    static void addPlanetItemImportFlows(Table parent, Planet planet, PlanetLogisticsData data) {
-        Table t = buildFlowTable();
-        int i = 0;
-        for (Item item : content.items()) {
-            int total = (int) (data.getItemImportRate(planet, item) * 60);
-            if (total <= 0) continue;
-            t.image(item.uiIcon).scaling(Scaling.fit).padRight(3).size(iconSmall);
-            t.add(UI.formatAmount(total) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(3);
-            if (++i % 2 == 0) t.row();
+    static void appendSectorExportHeader(Table c, Sector sector, Planet dest, @Nullable Sector contextSector) {
+        if (contextSector == sector) {
+            if (dest != null) c.add(formatPlanetLink(dest)).left().row();
+            return;
         }
-        appendFlows(parent, t);
+        String ic = sector.iconChar();
+        String prefix = ic == null || ic.isEmpty() ? "" : ic + " ";
+        if (dest != null) {
+            c.add("[lightgray]" + prefix + sector.name() + "[] " + formatPlanetLink(dest)).left().row();
+        } else {
+            appendSectorHeader(c, sector);
+        }
     }
 
-    static void addPlanetLiquidImportFlows(Table parent, Planet planet, PlanetLogisticsData data) {
-        Table t = buildFlowTable();
-        int i = 0;
-        for (Liquid liquid : content.liquids()) {
-            int total = (int) (data.getLiquidImportRate(planet, liquid) * 60);
-            if (total <= 0) continue;
-            t.image(liquid.uiIcon).scaling(Scaling.fit).padRight(3).size(iconSmall);
-            t.add(UI.formatAmount(total) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(3);
-            if (++i % 2 == 0) t.row();
-        }
-        appendFlows(parent, t);
+    static void borderedTable(Table parent, arc.func.Cons<Table> builder) {
+        parent.table(Styles.grayPanel, t -> {
+            t.left();
+            t.defaults().left().padBottom(2);
+            t.margin(6f);
+            builder.get(t);
+        }).fillX().left().padBottom(4).row();
     }
 
-    static void addPlanetPayloadImportFlows(Table parent, Planet planet, PlanetLogisticsData data) {
-        data.refreshPayloadImportRates(planet);
-        Table t = buildFlowTable();
-        int i = 0;
-        for (UnlockableContent content : data.payloadImportKeys) {
-            int total = (int) (data.getPayloadImportRate(planet, content) * 60);
-            if (total <= 0) continue;
-            t.image(content.uiIcon).scaling(Scaling.fit).padRight(3).size(iconSmall);
-            t.add(UI.formatAmount(total) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(3);
-            if (++i % 2 == 0) t.row();
+    static boolean hasSectorLogisticsContent(Sector sector) {
+        SectorLogisticsData data = SectorLogistics.get(sector);
+        if (buildItemExportTable(sector.info.production) != null) return true;
+        if (buildItemExportTable(sector.info.export) != null || hasSectorExport(data)) return true;
+        if (sector.hasBase() && (buildItemExportTable(sector.info.imports) != null || data.anyIncomingImports(sector.planet, sector))) {
+            return true;
         }
-        appendFlows(parent, t);
-    }
-
-    static void addSectorLiquidImportFlows(Table parent, Sector sector, SectorLogisticsData data) {
-        Table t = buildFlowTable();
-        int i = 0;
-        for (Liquid liquid : content.liquids()) {
-            int total = (int) (data.getLiquidImportRate(sector.planet, sector, liquid) * 60);
-            if (total <= 0) continue;
-            t.image(liquid.uiIcon).scaling(Scaling.fit).padRight(3).size(iconSmall);
-            t.add(UI.formatAmount(total) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(3);
-            if (++i % 2 == 0) t.row();
-        }
-        appendFlows(parent, t);
-    }
-
-    static void addSectorPayloadImportFlows(Table parent, Sector sector, SectorLogisticsData data) {
-        data.refreshPayloadImportRates(sector.planet, sector);
-        Table t = buildFlowTable();
-        int i = 0;
-        for (UnlockableContent content : data.payloadImportKeys) {
-            int total = (int) (data.getPayloadImportRate(sector.planet, sector, content) * 60);
-            if (total <= 0) continue;
-            t.image(content.uiIcon).scaling(Scaling.fit).padRight(3).size(iconSmall);
-            t.add(UI.formatAmount(total) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(3);
-            if (++i % 2 == 0) t.row();
-        }
-        appendFlows(parent, t);
+        return sector.hasBase() && sector.items().total > 0;
     }
 
     static <T> boolean hasFlow(ObjectMap<T, FlowStat> map) {
@@ -331,34 +387,32 @@ public class StarMapLogisticsUI {
         return found[0];
     }
 
-    static void appendPlanetDestination(Table c, Planet planet) {
-        Planet dest = PlanetLogistics.get(planet).destinationPlanet();
-        if (dest == null) return;
-        c.add(formatPlanetLink(dest)).padLeft(10f).left().row();
-    }
-
-    static void appendPlanetImportSources(Table c, Planet planet) {
-        Seq<Planet> shown = new Seq<>();
+    static boolean hasPlanetLogisticsContent(Planet planet) {
+        if (!PlanetLogistics.hasBase(planet)) return false;
         PlanetLogisticsData data = PlanetLogistics.get(planet);
-        data.eachItemSource(planet, p -> addPlanetImportSource(shown, c, p));
-        data.eachLiquidSource(planet, p -> addPlanetImportSource(shown, c, p));
-        data.eachPayloadSource(planet, p -> addPlanetImportSource(shown, c, p));
-    }
-
-    static void addPlanetImportSource(Seq<Planet> shown, Table c, Planet source) {
-        if (shown.contains(source)) return;
-        shown.add(source);
-        c.add(formatPlanetLink(source)).padLeft(10f).left().row();
-    }
-
-    static void addSectorImportSource(Seq<Sector> shown, Table c, Sector source) {
-        if (shown.contains(source)) return;
-        shown.add(source);
-        c.add(formatSectorLink(source)).padLeft(10f).left().row();
+        if (hasPlanetExport(data, planet)) return true;
+        if (data.anyIncomingImports(planet)) return true;
+        return collectPlanetItems(planet).total > 0;
     }
 
     static String formatPlanetLink(Planet planet) {
         return Iconc.rightOpen + " " + planet.localizedName;
+    }
+
+    static String formatImportPlanetLink(Planet planet) {
+        return Iconc.leftOpen + " " + planet.localizedName;
+    }
+
+    static String formatImportPlanetSectorLink(Planet planet, Sector sector) {
+        String ic = sector.iconChar();
+        String prefix = ic == null || ic.isEmpty() ? "" : ic + " ";
+        return Iconc.leftOpen + " " + planet.localizedName + " | " + prefix + sector.name();
+    }
+
+    static String formatImportSectorLink(Sector sector) {
+        String ic = sector.iconChar();
+        String prefix = ic == null || ic.isEmpty() ? "" : ic + " ";
+        return Iconc.leftOpen + " " + prefix + sector.name();
     }
 
     static String formatSectorLink(Sector sector) {
@@ -367,67 +421,102 @@ public class StarMapLogisticsUI {
         return Iconc.rightOpen + " " + prefix + sector.name();
     }
 
-    static void addItemFlows(Table parent, ObjectMap<Item, FlowStat> stats) {
+    static Table buildSectorExportFlowTable(ObjectMap<Item, ExportStat> itemExports, SectorLogisticsData data) {
         Table t = buildFlowTable();
+        int i = appendItemExportEntries(t, itemExports);
+        i = appendFlowMapEntries(t, data.liquidExport, content.liquids(), liquid -> liquid.uiIcon, i);
+        appendPayloadMapEntries(t, data.payloadExport, i);
+        return t.getChildren().any() ? t : null;
+    }
+
+    static Table buildSectorImportFlowTable(ObjectMap<Item, ExportStat> itemImports, Sector sector, SectorLogisticsData data, boolean hasLogisticsImport) {
+        Table t = buildFlowTable();
+        int i = appendItemExportEntries(t, itemImports);
+        if (!hasLogisticsImport) return t.getChildren().any() ? t : null;
+        for (Liquid liquid : content.liquids()) {
+            int total = (int) (data.getLiquidImportRate(sector.planet, sector, liquid) * 60);
+            if (total <= 0) continue;
+            appendFlowEntry(t, liquid.uiIcon, total, i++);
+        }
+        data.refreshPayloadImportRates(sector.planet, sector);
+        for (UnlockableContent payload : data.payloadImportKeys) {
+            int total = (int) (data.getPayloadImportRate(sector.planet, sector, payload) * 60);
+            if (total <= 0) continue;
+            appendFlowEntry(t, payload.uiIcon, total, i++);
+        }
+        return t.getChildren().any() ? t : null;
+    }
+
+    static void addAllFlows(Table parent, ObjectMap<Item, FlowStat> items, ObjectMap<Liquid, FlowStat> liquids, ObjectMap<UnlockableContent, FlowStat> payloads) {
+        Table t = buildCombinedFlowTable(items, liquids, payloads);
+        if (t != null) parent.add(t).padLeft(4f).left().row();
+    }
+
+    static Table buildCombinedFlowTable(ObjectMap<Item, FlowStat> items, ObjectMap<Liquid, FlowStat> liquids, ObjectMap<UnlockableContent, FlowStat> payloads) {
+        Table t = buildFlowTable();
+        int i = appendFlowMapEntries(t, items, content.items(), item -> item.uiIcon, 0);
+        i = appendFlowMapEntries(t, liquids, content.liquids(), liquid -> liquid.uiIcon, i);
+        appendPayloadMapEntries(t, payloads, i);
+        return t.getChildren().any() ? t : null;
+    }
+
+    static int appendItemExportEntries(Table t, ObjectMap<Item, ExportStat> stats) {
         int i = 0;
         for (Item item : content.items()) {
-            FlowStat stat = stats.get(item);
+            ExportStat stat = stats.get(item);
             if (stat == null) continue;
             int total = (int) (stat.mean * 60);
-            if (total <= 0) continue;
-            t.image(item.uiIcon).scaling(Scaling.fit).padRight(3).size(iconSmall);
-            t.add(UI.formatAmount(total) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(3);
-            if (++i % 2 == 0) t.row();
+            if (total <= 1) continue;
+            appendFlowEntry(t, item.uiIcon, total, i++);
         }
-        appendFlows(parent, t);
+        return i;
     }
 
-    static void addLiquidFlows(Table parent, ObjectMap<Liquid, FlowStat> stats) {
-        Table t = buildFlowTable();
-        int i = 0;
-        for (Liquid liquid : content.liquids()) {
-            FlowStat stat = stats.get(liquid);
-            if (stat == null) continue;
-            int total = (int) (stat.mean * 60);
-            if (total <= 0) continue;
-            t.image(liquid.uiIcon).scaling(Scaling.fit).padRight(3).size(iconSmall);
-            t.add(UI.formatAmount(total) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(3);
-            if (++i % 2 == 0) t.row();
+    static <T> int appendFlowMapEntries(Table t, ObjectMap<T, FlowStat> stats, Iterable<T> contents, arc.func.Func<T, arc.graphics.g2d.TextureRegion> icon, int start) {
+        int i = start;
+        for (T entry : contents) {
+            FlowStat stat = stats.get(entry);
+            if (stat == null || stat.mean <= 0f) continue;
+            appendFlowEntry(t, icon.get(entry), (int) (stat.mean * 60), i++);
         }
-        appendFlows(parent, t);
+        return i;
     }
 
-    static void addPayloadFlows(Table parent, ObjectMap<UnlockableContent, FlowStat> stats) {
-        Table t = buildFlowTable();
-        int i = 0;
+    static void appendPayloadMapEntries(Table t, ObjectMap<UnlockableContent, FlowStat> stats, int start) {
+        int i = start;
         for (Block block : content.blocks()) {
             FlowStat stat = stats.get(block);
-            if (stat == null) continue;
-            int total = (int) (stat.mean * 60);
-            if (total <= 0) continue;
-            t.image(block.uiIcon).scaling(Scaling.fit).padRight(3).size(iconSmall);
-            t.add(UI.formatAmount(total) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(3);
-            if (++i % 2 == 0) t.row();
+            if (stat == null || stat.mean <= 0f) continue;
+            appendFlowEntry(t, block.uiIcon, (int) (stat.mean * 60), i++);
         }
         for (UnitType unit : content.units()) {
             FlowStat stat = stats.get(unit);
-            if (stat == null) continue;
-            int total = (int) (stat.mean * 60);
-            if (total <= 0) continue;
-            t.image(unit.uiIcon).scaling(Scaling.fit).padRight(3).size(iconSmall);
-            t.add(UI.formatAmount(total) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(3);
-            if (++i % 2 == 0) t.row();
+            if (stat == null || stat.mean <= 0f) continue;
+            appendFlowEntry(t, unit.uiIcon, (int) (stat.mean * 60), i++);
         }
-        appendFlows(parent, t);
+    }
+
+    static <T> void mergeFlowMap(ObjectMap<T, FlowStat> into, ObjectMap<T, FlowStat> from) {
+        from.each((key, stat) -> {
+            if (stat.mean <= 0f) return;
+            FlowStat target = into.get(key);
+            if (target == null) {
+                target = new FlowStat();
+                target.mean = stat.mean;
+                into.put(key, target);
+            } else {
+                target.mean += stat.mean;
+            }
+        });
+    }
+
+    static void appendFlowEntry(Table t, arc.graphics.g2d.TextureRegion icon, int perMinute, int index) {
+        t.image(icon).scaling(Scaling.fit).padRight(2).size(iconSmall);
+        t.add(UI.formatAmount(perMinute) + " " + Core.bundle.get("unit.perminute")).color(Color.lightGray).padRight(6f).left();
+        if ((index + 1) % 3 == 0) t.row();
     }
 
     static Table buildFlowTable() {
         return new Table().left();
-    }
-
-    static void appendFlows(Table parent, Table t) {
-        if (t.getChildren().any()) {
-            parent.add(t).padLeft(10f).left().row();
-        }
     }
 }

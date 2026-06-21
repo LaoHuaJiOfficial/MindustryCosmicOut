@@ -1,10 +1,10 @@
 package mod.extend.type.spaceship;
 
 import arc.struct.EnumSet;
-import mindustry.type.Category;
-import mindustry.type.ItemStack;
 import mindustry.world.Block;
 import mindustry.world.meta.BlockGroup;
+import mindustry.world.meta.StatUnit;
+import mod.content.ModStats;
 
 public class ShipHull extends Block implements ShipBlock {
     public float structurePoints = 10f;
@@ -25,5 +25,12 @@ public class ShipHull extends Block implements ShipBlock {
     @Override
     public float blockHull(){
         return structurePoints;
+    }
+
+    @Override
+    public void setStats(){
+        super.setStats();
+        stats.add(ModStats.hull, structurePoints, StatUnit.none);
+        stats.add(ModStats.shipMass, blockMass(), StatUnit.none);
     }
 }

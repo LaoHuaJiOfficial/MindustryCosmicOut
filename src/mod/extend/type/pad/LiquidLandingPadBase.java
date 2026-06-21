@@ -1,6 +1,5 @@
 package mod.extend.type.pad;
 
-import arc.Core;
 import arc.Events;
 import arc.scene.ui.layout.Table;
 import arc.struct.ObjectMap;
@@ -8,11 +7,14 @@ import arc.struct.Seq;
 import arc.util.Nullable;
 import arc.util.io.Reads;
 import arc.util.io.Writes;
+import mindustry.ctype.UnlockableContent;
 import mindustry.gen.Building;
 import mindustry.gen.Call;
 import mindustry.io.TypeIO;
 import mindustry.type.Liquid;
 import mindustry.world.blocks.ItemSelection;
+import mindustry.world.meta.StatUnit;
+import mod.content.ModStats;
 
 import static mindustry.Vars.*;
 
@@ -48,6 +50,12 @@ public abstract class LiquidLandingPadBase extends ModLandingPad {
 
     protected boolean acceptLiquidConfig(Liquid liquid) {
         return true;
+    }
+
+    @Override
+    public void setStats() {
+        super.setStats();
+        stats.add(ModStats.landingVolume, landingVolume, StatUnit.liquidUnits);
     }
 
     @Override
@@ -177,15 +185,14 @@ public abstract class LiquidLandingPadBase extends ModLandingPad {
         }
 
         @Override
-        public void display(Table table) {
-            super.display(table);
-            if (!state.isCampaign() || net.client() || team != player.team() || isFake() || liquidConfig == null) return;
+        public void drawSelect() {
+            drawItemSelection(liquidConfig);
+        }
 
-            table.row();
-            table.label(() -> {
-                if (legacyDisabled()) return Core.bundle.get("landingpad.legacy.disabled");
-                return buildImportSourcesLabel(liquidConfig);
-            }).pad(4).wrap().width(200f).left();
+        @Override
+        protected String buildImportDisplayLabel() {
+            if (liquidConfig == null) return null;
+            return buildImportSourcesLabel(liquidConfig);
         }
 
         @Override

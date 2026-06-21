@@ -6,6 +6,11 @@ import arc.struct.Seq;
 public class HexCoord {
     public int a = 0, b = 0, c = 0;
 
+    static final int[][] neighbors = {
+            {1, -1, 0}, {1, 0, -1}, {0, 1, -1},
+            {-1, 1, 0}, {-1, 0, 1}, {0, -1, 1}
+    };
+
     public HexCoord(){}
 
     public HexCoord(int a, int b, int c){
@@ -75,6 +80,41 @@ public class HexCoord {
                 Mathf.lerp(from.b, to.b, t),
                 Mathf.lerp(from.c, to.c, t)
             ));
+        }
+
+        return result;
+    }
+
+    public static Seq<HexCoord> path(HexCoord from, HexCoord to){
+        if(from.equals(to)) return Seq.with(new HexCoord(from.a, from.b, from.c));
+
+        Seq<HexCoord> result = new Seq<>();
+        HexCoord cur = new HexCoord(from.a, from.b, from.c);
+        result.add(new HexCoord(cur.a, cur.b, cur.c));
+
+        int maxSteps = distance(from.a, from.b, from.c, to.a, to.b, to.c) + 2;
+        for(int step = 0; step < maxSteps && !cur.equals(to); step++){
+            int bestDist = distance(cur.a, cur.b, cur.c, to.a, to.b, to.c);
+            int nextA = cur.a, nextB = cur.b, nextC = cur.c;
+
+            for(int[] dir : neighbors){
+                int na = cur.a + dir[0];
+                int nb = cur.b + dir[1];
+                int nc = cur.c + dir[2];
+                int dist = distance(na, nb, nc, to.a, to.b, to.c);
+                if(dist < bestDist){
+                    bestDist = dist;
+                    nextA = na;
+                    nextB = nb;
+                    nextC = nc;
+                }
+            }
+
+            if(nextA == cur.a && nextB == cur.b && nextC == cur.c) break;
+            cur.a = nextA;
+            cur.b = nextB;
+            cur.c = nextC;
+            result.add(new HexCoord(cur.a, cur.b, cur.c));
         }
 
         return result;

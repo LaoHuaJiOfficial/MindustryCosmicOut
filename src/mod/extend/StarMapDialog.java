@@ -43,6 +43,7 @@ import arc.struct.Seq;
 import mindustry.type.Sector;
 import mod.extend.sector.PlanetLogistics;
 import mod.extend.sector.PlanetLogisticsData;
+import mod.extend.type.pad.PadDisplayUI;
 import mod.ModUI;
 import mod.extend.starmap.StarMapPlanetData;
 import mod.extend.starmap.StarMapPlanets;
@@ -60,6 +61,7 @@ public class StarMapDialog extends BaseDialog {
     public boolean selectingDestination = false;
     public @Nullable Cons<Sector> onSectorSelected;
     public @Nullable Sector selectFrom;
+    public int selectMaxPath = 0;
 
     public Rect bounds = new Rect();
     public View view;
@@ -171,8 +173,13 @@ public class StarMapDialog extends BaseDialog {
     }
 
     public void showSectorSelect(@Nullable Sector from, Cons<Sector> callback) {
+        showSectorSelect(from, callback, 0);
+    }
+
+    public void showSectorSelect(@Nullable Sector from, Cons<Sector> callback, int maxPath) {
         selectingDestination = true;
         selectFrom = from;
+        selectMaxPath = maxPath;
         onSectorSelected = callback;
         currentPlanet = from != null ? from.planet : null;
         show();
@@ -203,6 +210,7 @@ public class StarMapDialog extends BaseDialog {
 
     void confirmSectorSelect() {
         if (currentPlanet == null || !isStarmapPlanet(currentPlanet) || onSectorSelected == null) return;
+        if (exceedsMaxPath()) return;
 
         Sector dest = resolveSector(currentPlanet);
         if (dest == null || dest == selectFrom) return;
@@ -211,11 +219,18 @@ public class StarMapDialog extends BaseDialog {
         hide();
     }
 
+    boolean exceedsMaxPath() {
+        if (!selectingDestination || selectMaxPath <= 0 || selectFrom == null || currentPlanet == null) return false;
+        if (!isSelectableDestination(currentPlanet, selectFrom)) return false;
+        return PadDisplayUI.planetPathSteps(selectFrom.planet, currentPlanet) > selectMaxPath;
+    }
+
     @Override
     public void hide() {
         selectingDestination = false;
         onSectorSelected = null;
         selectFrom = null;
+        selectMaxPath = 0;
         super.hide();
     }
 
@@ -229,6 +244,10 @@ public class StarMapDialog extends BaseDialog {
         hexPlanets.rebuild();
     }
 
+    void resetStarMapView() {
+        view.resetView();
+    }
+
     public void rebuildButtons() {
         buttons.clearChildren();
         buttons.bottom();
@@ -238,7 +257,7 @@ public class StarMapDialog extends BaseDialog {
             buttons.row();
             buttons.table(t -> {
                 t.button("@back", Icon.left, this::hide).size(200f, 54f).pad(2).bottom();
-                t.button("Star Map", Icon.tree, () -> {}).size(200f, 54f).pad(2).bottom();
+                t.button("@starmap.center", Icon.zoom, this::resetStarMapView).size(200f, 54f).pad(2).bottom();
             }).pad(0).margin(0);
             buttons.row();
         } else {
@@ -247,7 +266,7 @@ public class StarMapDialog extends BaseDialog {
             buttons.add(sectorTop).minWidth(280f);
             buttons.add().growX();
             buttons.table(t -> {
-                t.button("Star Map", Icon.planet, () -> {}).size(200f, 54f).pad(2).bottom();
+                t.button("@starmap.center", Icon.zoom, this::resetStarMapView).size(200f, 54f).pad(2).bottom();
             }).bottom().pad(0).margin(0);
         }
     }
@@ -286,8 +305,13 @@ public class StarMapDialog extends BaseDialog {
         }
 
         if (selectingDestination) {
+            if (selectFrom != null && selectMaxPath > 0 && currentPlanet != null && isSelectableDestination(currentPlanet, selectFrom)) {
+                int steps = PadDisplayUI.planetPathSteps(selectFrom.planet, currentPlanet);
+                String stepColor = steps > selectMaxPath ? "[red]" : "[accent]";
+                stable.add(Core.bundle.get("stat.maxpath") + ": " + stepColor + steps + "[lightgray] / [accent]" + selectMaxPath).pad(4f).row();
+            }
             stable.button("@sectors.launch", Icon.upOpen, this::confirmSectorSelect)
-                    .disabled(currentPlanet == null || !isSelectableDestination(currentPlanet, selectFrom))
+                    .disabled(currentPlanet == null || !isSelectableDestination(currentPlanet, selectFrom) || exceedsMaxPath())
                     .size(200f, 54f).bottom().row();
         } else {
             stable.button("View Planet", Icon.eye, () -> {
@@ -333,6 +357,7 @@ public class StarMapDialog extends BaseDialog {
 
         if (selectedPlanet != null && PlanetLogistics.hasBase(selectedPlanet)) {
             PlanetLogisticsData selectedData = PlanetLogistics.get(selectedPlanet);
+            StarMapPlanetData selectedEntry = StarMapPlanets.get(selectedPlanet);
 
             for (StarMapPlanetData otherEntry : StarMapPlanets.all) {
                 Planet other = otherEntry.planet;
@@ -342,12 +367,12 @@ public class StarMapDialog extends BaseDialog {
                 PlanetLogisticsData otherData = PlanetLogistics.get(other);
                 String importKey = other.name + "->" + selectedPlanet.name;
 
-                if (otherData.destinationPlanet() == selectedPlanet) {
-                    addLink(cons, seen, importKey, otherEntry, StarMapPlanets.get(selectedPlanet), otherData, false);
+                if (otherData.anyExportsTo(selectedPlanet)) {
+                    addLink(cons, seen, importKey, otherEntry, selectedEntry, otherData, selectedPlanet, false);
                 }
 
-                if (selectedData.destinationPlanet() == other) {
-                    addLink(cons, seen, selectedPlanet.name + "->" + other.name, StarMapPlanets.get(selectedPlanet), otherEntry, selectedData, true);
+                if (selectedData.anyExportsTo(other)) {
+                    addLink(cons, seen, selectedPlanet.name + "->" + other.name, selectedEntry, otherEntry, selectedData, other, true);
                 }
             }
             return;
@@ -358,22 +383,24 @@ public class StarMapDialog extends BaseDialog {
             if (!isStarmapPlanet(from)) continue;
             if (!PlanetLogistics.hasBase(from)) continue;
 
-            Planet dest = PlanetLogistics.get(from).destinationPlanet();
-            StarMapPlanetData toEntry = dest == null ? null : StarMapPlanets.get(dest);
-            if (toEntry == null || !isStarmapPlanet(dest) || from == dest) continue;
+            PlanetLogisticsData fromData = PlanetLogistics.get(from);
+            for (StarMapPlanetData toEntry : StarMapPlanets.all) {
+                Planet dest = toEntry.planet;
+                if (!isStarmapPlanet(dest) || from == dest) continue;
 
-            String key = from.name + "->" + dest.name;
-            if (seen.contains(key)) continue;
-            seen.add(key);
+                String key = from.name + "->" + dest.name;
+                if (seen.contains(key)) continue;
+                if (!fromData.anyExportsTo(dest)) continue;
 
-            addLink(cons, seen, key, fromEntry, toEntry, PlanetLogistics.get(from), true);
+                addLink(cons, seen, key, fromEntry, toEntry, fromData, dest, true);
+            }
         }
     }
 
-    void addLink(Cons<LogisticsLink> cons, ObjectSet<String> seen, String key, StarMapPlanetData from, StarMapPlanetData to, PlanetLogisticsData data, boolean exportFromSelected) {
-        if (data.anyPayloadExports()) tryAddLink(cons, seen, key + ":payload", from, to, LogisticsLane.payload, exportFromSelected);
-        if (data.anyItemExports()) tryAddLink(cons, seen, key + ":item", from, to, LogisticsLane.item, exportFromSelected);
-        if (data.anyLiquidExports()) tryAddLink(cons, seen, key + ":liquid", from, to, LogisticsLane.liquid, exportFromSelected);
+    void addLink(Cons<LogisticsLink> cons, ObjectSet<String> seen, String key, StarMapPlanetData from, StarMapPlanetData to, PlanetLogisticsData data, Planet dest, boolean exportFromSelected) {
+        if (data.anyPayloadExportsTo(dest)) tryAddLink(cons, seen, key + ":payload", from, to, LogisticsLane.payload, exportFromSelected);
+        if (data.anyItemExportsTo(dest)) tryAddLink(cons, seen, key + ":item", from, to, LogisticsLane.item, exportFromSelected);
+        if (data.anyLiquidExportsTo(dest)) tryAddLink(cons, seen, key + ":liquid", from, to, LogisticsLane.liquid, exportFromSelected);
     }
 
     void tryAddLink(Cons<LogisticsLink> cons, ObjectSet<String> seen, String key, StarMapPlanetData from, StarMapPlanetData to, LogisticsLane lane, boolean exportFromSelected) {
@@ -405,6 +432,39 @@ public class StarMapDialog extends BaseDialog {
         Lines.stroke(stroke);
         Lines.line(sx, sy, Tmp.c1, Tmp.v1.x, Tmp.v1.y, to);
         Lines.line(Tmp.v1.x, Tmp.v1.y, from, ex, ey, Tmp.c1);
+
+        Draw.reset();
+    }
+
+    void drawSelectHexPath(HexCoord from, HexCoord to, float offsetX, float offsetY, Color color, float alpha, float stroke) {
+        Seq<HexCoord> path = HexCoord.path(from, to);
+        if (path.size < 2) return;
+
+        float pad = hexGrid.size * 0.55f;
+
+        Draw.z(0.66f);
+        Draw.alpha(alpha);
+        Lines.stroke(stroke, color);
+
+        for (int i = 0; i < path.size - 1; i++) {
+            hexGrid.hexToWorld(path.get(i), offsetX, offsetY, Tmp.v1);
+            hexGrid.hexToWorld(path.get(i + 1), offsetX, offsetY, Tmp.v2);
+
+            float x1 = Tmp.v1.x, y1 = Tmp.v1.y, x2 = Tmp.v2.x, y2 = Tmp.v2.y;
+            if (i == 0) {
+                float ang = Mathf.angle(x2 - x1, y2 - y1);
+                x1 += Mathf.cosDeg(ang) * pad;
+                y1 += Mathf.sinDeg(ang) * pad;
+            }
+            if (i == path.size - 2) {
+                float ang = Mathf.angle(x2 - x1, y2 - y1);
+                x2 -= Mathf.cosDeg(ang) * pad;
+                y2 -= Mathf.sinDeg(ang) * pad;
+            }
+
+            if (Mathf.dst(x1, y1, x2, y2) <= 0.001f) continue;
+            Lines.line(x1, y1, x2, y2);
+        }
 
         Draw.reset();
     }
@@ -511,12 +571,26 @@ public class StarMapDialog extends BaseDialog {
     }
 
     public class View extends Group {
-        public float panX = 0, panY = -30, lastZoom = -1;
+        public static final float initialPanX = 0f;
+        public static final float initialPanY = -30f;
+        public static final float initialScale = 1f;
+
+        public float panX = initialPanX, panY = initialPanY, lastZoom = -1;
         public boolean moved = false;
         public @Nullable HexCoord hoverHex;
 
         {
             rebuildAll();
+        }
+
+        public void resetView() {
+            panX = initialPanX;
+            panY = initialPanY;
+            lastZoom = -1;
+            moved = false;
+            setScale(initialScale);
+            setOrigin(Align.center);
+            setTransform(true);
         }
 
         public void rebuildAll(){
@@ -539,6 +613,9 @@ public class StarMapDialog extends BaseDialog {
                         updateSelectedPlanet();
                     } else if (!selectingDestination && planet != null) {
                         currentPlanet = planet;
+                        updateSelectedPlanet();
+                    } else if (planet == null) {
+                        currentPlanet = null;
                         updateSelectedPlanet();
                     }
                 }
@@ -619,6 +696,11 @@ public class StarMapDialog extends BaseDialog {
         }
 
         void drawLogisticsArrows(float offsetX, float offsetY) {
+            if (selectingDestination) {
+                drawSelectPathPreview(offsetX, offsetY);
+                return;
+            }
+
             Draw.z(0.65f);
             Planet selectedPlanet = currentPlanet;
 
@@ -645,6 +727,18 @@ public class StarMapDialog extends BaseDialog {
             });
 
             Draw.reset();
+        }
+
+        void drawSelectPathPreview(float offsetX, float offsetY) {
+            if (selectFrom == null || currentPlanet == null) return;
+            if (!isSelectableDestination(currentPlanet, selectFrom)) return;
+
+            HexCoord fromHex = hexPlanets.planetCoord(selectFrom.planet);
+            HexCoord toHex = hexPlanets.planetCoord(currentPlanet);
+            if (fromHex == null || toHex == null) return;
+
+            float stroke = hexGrid.lineWidth * 1.75f;
+            drawSelectHexPath(fromHex, toHex, offsetX, offsetY, Color.white, parentAlpha * 0.95f, stroke);
         }
 
         void drawPlanets(float offsetX, float offsetY){

@@ -1,17 +1,17 @@
 #the mod name as displayed in-game
-displayName: "Java Mod Template"
+displayName: "Cosmic Out"
 
 #the internal name of your mod
-name: "mod-java-mod"
+name: "cosmic-out"
 
 #your name
-author: "You"
+author: "LaoHuaJi"
 
 #the fully qualified main class of the mod
 main: "mod.CosmicOut"
 
 #the mod description as seen in the mod dialog
-description: "A Mindustry Java mod template."
+description: "A Mindustry lib mod that adds support for starmap, more sector logistics and planetary logistics."
 
 #the mod version
 version: 1.0

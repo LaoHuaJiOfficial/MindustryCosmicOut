@@ -1,0 +1,7 @@
+type: PayloadLandingPad
+category: effect
+buildVisibility: notLegacyLaunchPadOnly
+requirements: []
+size: 3
+consumeLiquidAmount: -1
+alwaysUnlocked: true

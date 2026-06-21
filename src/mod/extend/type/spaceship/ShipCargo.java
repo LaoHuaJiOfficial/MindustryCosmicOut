@@ -9,6 +9,8 @@ import mindustry.world.blocks.payloads.BuildPayload;
 import mindustry.world.blocks.payloads.Payload;
 import mindustry.world.blocks.payloads.UnitPayload;
 import mindustry.world.meta.BlockGroup;
+import mindustry.world.meta.StatUnit;
+import mod.content.ModStats;
 
 public class ShipCargo extends Block implements ShipBlock {
     public float massPerSize = 2f;
@@ -27,6 +29,13 @@ public class ShipCargo extends Block implements ShipBlock {
     @Override
     public float blockMass(){
         return size * size * massPerSize;
+    }
+
+    @Override
+    public void setStats(){
+        super.setStats();
+        stats.add(ModStats.stackCapacity, stackCapacity, StatUnit.none);
+        stats.add(ModStats.shipMass, blockMass(), StatUnit.none);
     }
 
     @SuppressWarnings("InnerClassMayBeStatic")

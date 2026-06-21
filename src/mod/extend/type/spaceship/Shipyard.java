@@ -14,6 +14,7 @@ import mindustry.world.Tile;
 import mindustry.world.blocks.ConstructBlock;
 import mindustry.world.meta.BlockFlag;
 import mindustry.world.meta.BlockGroup;
+import mod.content.ModStats;
 import mod.extend.type.SpaceshipStats;
 
 import static mindustry.Vars.indexer;
@@ -36,6 +37,12 @@ public class Shipyard extends Block {
 
         group = BlockGroup.units;
         flags = EnumSet.of(BlockFlag.unitAssembler);
+    }
+
+    @Override
+    public void setStats(){
+        super.setStats();
+        stats.add(ModStats.yardSize, "@x@", yardWidth, yardHeight);
     }
 
     public Rect getRect(Rect rect, float x, float y, int rotation){

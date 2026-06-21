@@ -324,18 +324,15 @@ public abstract class PayloadLandingPadBase extends ModLandingPad {
         }
 
         @Override
-        public void display(Table table) {
-            super.display(table);
-            if (!state.isCampaign() || net.client() || team != player.team() || isFake()) return;
+        public void drawSelect() {
+            drawItemSelection(payloadConfig());
+        }
 
+        @Override
+        protected String buildImportDisplayLabel() {
             UnlockableContent config = payloadConfig();
-            if (config == null) return;
-
-            table.row();
-            table.label(() -> {
-                if (legacyDisabled()) return Core.bundle.get("landingpad.legacy.disabled");
-                return buildImportSourcesLabel(config);
-            }).pad(4).wrap().width(200f).left();
+            if (config == null) return null;
+            return buildImportSourcesLabel(config);
         }
 
         @Override

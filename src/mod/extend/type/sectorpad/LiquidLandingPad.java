@@ -1,11 +1,10 @@
 package mod.extend.type.sectorpad;
 
-import arc.Core;
 import mindustry.type.Liquid;
-import mindustry.type.Sector;
 import mod.extend.sector.SectorLogistics;
 import mod.extend.sector.SectorLogisticsData;
 import mod.extend.type.pad.LiquidLandingPadBase;
+import mod.extend.type.pad.PadDisplayUI;
 
 import static mindustry.Vars.*;
 
@@ -44,21 +43,8 @@ public class LiquidLandingPad extends LiquidLandingPadBase {
 
     @Override
     protected String buildImportSourcesLabel(Liquid liquid) {
-        int sources = 0;
-        float perSecond = 0f;
-        for (Sector other : state.getPlanet().sectors) {
-            if (other == state.getSector() || !other.hasBase() || other.info.destination != state.getSector()) continue;
-            float amount = SectorLogistics.get(other).getLiquidExport(liquid);
-            if (amount <= 0f) continue;
-            sources++;
-            perSecond += amount;
-        }
-
-        String str = Core.bundle.format("landing.sources", sources == 0 ? Core.bundle.get("none") : sources);
-        if (perSecond > 0f) {
-            str += "\n" + Core.bundle.format("landing.import", liquid.emoji(), (int) (perSecond * 60f));
-        }
-        return str;
+        PadDisplayUI.ImportSources sources = PadDisplayUI.sectorLiquidSources(state.getSector(), liquid);
+        return PadDisplayUI.formatImportWithSectors(liquid, sources.sectors, sources.perSecond, state.getPlanet());
     }
 
     public class LiquidLandingPadBuild extends LiquidLandingPadBase.LiquidLandingPadBuild {

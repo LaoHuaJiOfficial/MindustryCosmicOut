@@ -67,7 +67,7 @@ public class ModUI {
                 t.button("@techtree", Icon.tree, () -> ui.research.show()).size(200f, 54f).visible(() -> planet.mode == look).pad(2).bottom();
             }).pad(0).margin(0);
             buttons.row();
-            buttons.button("Star Map", Icon.planet, () -> starmap.show()).size(0, 54f).visible(() -> planet.mode == look).pad(2).bottom().fillX();
+            buttons.button("@starmap", Icon.planet, () -> starmap.show()).size(0, 54f).visible(() -> planet.mode == look).pad(2).bottom().fillX();
         } else {
             buttons.button("@back", Icon.left, planet::hide).size(200f, 54f).pad(2).bottom();
             buttons.add().growX();
@@ -75,7 +75,7 @@ public class ModUI {
             buttons.add().growX();
             buttons.table(t -> {
                 t.button("@techtree", Icon.tree, () -> ui.research.show()).size(200f, 54f).visible(() -> planet.mode == look).pad(2).row();
-                t.button("Star Map", Icon.planet, () -> starmap.show()).size(200f, 54f).visible(() -> planet.mode == look).pad(2).bottom();
+                t.button("@starmap", Icon.planet, () -> starmap.show()).size(200f, 54f).visible(() -> planet.mode == look).pad(2).bottom();
             }).bottom().pad(0).margin(0);
         }
     }

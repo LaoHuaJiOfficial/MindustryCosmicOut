@@ -1,6 +1,5 @@
 package mod.extend.type.sectorpad;
 
-import arc.Core;
 import arc.scene.ui.layout.Table;
 import mindustry.type.Sector;
 import mod.extend.type.pad.ModLaunchPad;
@@ -18,23 +17,13 @@ public class SectorLaunchPad extends ModLaunchPad {
         }
 
         @Override
-        protected void buildDestinationConfig(Table table) {
-            SectorPadDestination.addConfigButton(table, this::deselect);
+        protected Object logisticsDestination() {
+            return destination();
         }
 
         @Override
-        public void display(Table table) {
-            super.display(table);
-
-            if (!state.isCampaign() || net.client() || team != player.team()) return;
-
-            table.row();
-            table.label(() -> {
-                Sector dest = state.rules.sector == null ? null : state.rules.sector.info.destination;
-                return Core.bundle.format("launch.destination",
-                        dest == null || !dest.hasBase() ? Core.bundle.get("sectors.nonelaunch") :
-                                "[accent]" + dest.name());
-            }).pad(4).wrap().width(200f).left();
+        protected void buildDestinationConfig(Table table) {
+            SectorPadDestination.addConfigButton(table, this::deselect);
         }
 
         @Override

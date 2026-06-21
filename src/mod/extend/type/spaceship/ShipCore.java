@@ -11,6 +11,8 @@ import mindustry.ui.Styles;
 import mindustry.world.Block;
 import mindustry.world.meta.BlockFlag;
 import mindustry.world.meta.BlockGroup;
+import mindustry.world.meta.StatUnit;
+import mod.content.ModStats;
 import mod.extend.type.Spaceship;
 import mod.extend.type.SpaceshipManager;
 import mod.extend.type.SpaceshipStats;
@@ -37,6 +39,12 @@ public class ShipCore extends Block implements ShipBlock {
     @Override
     public float blockMass(){
         return mass;
+    }
+
+    @Override
+    public void setStats(){
+        super.setStats();
+        stats.add(ModStats.shipMass, mass, StatUnit.none);
     }
 
     @SuppressWarnings("InnerClassMayBeStatic")

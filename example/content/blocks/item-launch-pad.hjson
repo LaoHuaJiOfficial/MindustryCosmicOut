@@ -1,0 +1,19 @@
+type: ItemLaunchPad
+category: effect
+buildVisibility: notLegacyLaunchPadOnly
+requirements: []
+size: 3
+itemCapacity: 40
+launchTime: 900
+liquidCapacity: 30
+hasPower: true
+lightSteps: 1
+lightStep: 0
+drawLiquid: oil
+alwaysUnlocked: true
+consumes: {
+  power: 8
+  liquids: [
+    oil/0.1
+  ]
+}

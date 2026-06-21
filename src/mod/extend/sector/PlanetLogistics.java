@@ -228,17 +228,22 @@ public class PlanetLogistics {
             if (!planet.campaignRules.legacyLaunchPads || !hasBase(planet) || isBeingPlayed(planet)) continue;
 
             PlanetLogisticsData data = get(planet);
-            Planet dest = data.destinationPlanet();
-            if (dest == null || !hasBase(dest)) continue;
+            for (Sector sector : planet.sectors) {
+                PlanetSectorLogisticsData sectorData = data.getSector(sector);
+                Planet dest = sectorData.destinationPlanet();
+                if (dest == null || !hasBase(dest)) continue;
 
-            ItemSeq exported = new ItemSeq();
-            data.eachSector(sectorData -> sectorData.itemExport.each((item, stat) -> exported.add(item, (int) (stat.mean * newSecondsPassed))));
-            addItems(dest, exported);
+                ItemSeq exported = new ItemSeq();
+                sectorData.itemExport.each((item, stat) -> exported.add(item, (int) (stat.mean * newSecondsPassed)));
+                addItems(dest, exported);
+            }
         }
     }
 
     private static PlanetLogisticsData load(Planet planet) {
-        return Core.settings.getJson(settingsKey(planet), PlanetLogisticsData.class, PlanetLogisticsData::new);
+        PlanetLogisticsData data = Core.settings.getJson(settingsKey(planet), PlanetLogisticsData.class, PlanetLogisticsData::new);
+        data.migrateLegacyDestination(planet);
+        return data;
     }
 
     private static String settingsKey(Planet planet) {

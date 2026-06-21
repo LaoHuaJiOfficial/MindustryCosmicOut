@@ -1,0 +1,15 @@
+type: LiquidLaunchPad
+category: effect
+buildVisibility: notLegacyLaunchPadOnly
+requirements: []
+size: 3
+launchTime: 900
+liquidCapacity: 1200
+launchVolume: 1000
+hasPower: true
+lightSteps: 1
+lightStep: 0
+alwaysUnlocked: true
+consumes: {
+  power: 8
+}

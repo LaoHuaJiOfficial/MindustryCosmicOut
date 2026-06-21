@@ -1,17 +1,31 @@
 package mod.extend.sector;
 
 import arc.struct.ObjectMap;
+import arc.util.Nullable;
 import mindustry.ctype.UnlockableContent;
 import mindustry.type.Item;
 import mindustry.type.Liquid;
+import mindustry.type.Planet;
+
+import static mindustry.Vars.content;
 
 public class PlanetSectorLogisticsData {
+    public @Nullable String destination;
+
     public ObjectMap<Item, FlowStat> itemExport = new ObjectMap<>();
     public ObjectMap<Item, FlowStat> itemImport = new ObjectMap<>();
     public ObjectMap<Liquid, FlowStat> liquidExport = new ObjectMap<>();
     public ObjectMap<Liquid, FlowStat> liquidImport = new ObjectMap<>();
     public ObjectMap<UnlockableContent, FlowStat> payloadExport = new ObjectMap<>();
     public ObjectMap<UnlockableContent, FlowStat> payloadImport = new ObjectMap<>();
+
+    public @Nullable Planet destinationPlanet() {
+        return destination == null ? null : content.planet(destination);
+    }
+
+    public void setDestination(@Nullable Planet planet) {
+        destination = planet == null ? null : planet.name;
+    }
 
     public void handleItemExport(Item item, int amount) {
         if (item == null || amount <= 0) return;

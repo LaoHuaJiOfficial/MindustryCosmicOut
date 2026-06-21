@@ -12,15 +12,28 @@ import mindustry.gen.LaunchPayload;
 import mindustry.graphics.Drawf;
 import mindustry.graphics.Pal;
 import mindustry.type.Liquid;
+import mindustry.type.Planet;
+import mindustry.world.meta.StatUnit;
 import mindustry.world.blocks.campaign.LaunchPad;
 import mindustry.world.blocks.liquid.LiquidBlock;
+import mod.content.ModStats;
 
 import static mindustry.Vars.*;
 
 public abstract class ModLaunchPad extends LaunchPad {
+    public int maxPath = 0;
+
     public ModLaunchPad(String name) {
         super(name);
         launchTime = 60f;
+    }
+
+    @Override
+    public void setStats() {
+        super.setStats();
+        if (maxPath > 0) {
+            stats.add(ModStats.maxPath, maxPath, StatUnit.none);
+        }
     }
 
     public abstract class ModLaunchPadBuild extends LaunchPadBuild {
@@ -88,5 +101,20 @@ public abstract class ModLaunchPad extends LaunchPad {
         }
 
         protected abstract void buildDestinationConfig(Table table);
+
+        protected @Nullable Object logisticsDestination() {
+            return null;
+        }
+
+        @Override
+        public void display(Table table) {
+            PadDisplayUI.invokeBuildingDisplay(this, table);
+            if (!PadDisplayUI.shouldShowCampaignLogistics(this)) return;
+            Object dest = logisticsDestination();
+            PadDisplayUI.appendDestination(table, dest);
+            if (((ModLaunchPad) block).maxPath > 0) {
+                PadDisplayUI.appendPathLength(table, state.getPlanet(), dest instanceof Planet p ? p : null, ((ModLaunchPad) block).maxPath);
+            }
+        }
     }
 }

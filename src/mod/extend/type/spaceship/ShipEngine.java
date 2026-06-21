@@ -3,6 +3,8 @@ package mod.extend.type.spaceship;
 import arc.struct.EnumSet;
 import mindustry.world.Block;
 import mindustry.world.meta.BlockGroup;
+import mindustry.world.meta.StatUnit;
+import mod.content.ModStats;
 
 public class ShipEngine extends Block implements ShipBlock {
     public float thrust = 10f;
@@ -24,5 +26,12 @@ public class ShipEngine extends Block implements ShipBlock {
     @Override
     public float blockThrust(){
         return thrust;
+    }
+
+    @Override
+    public void setStats(){
+        super.setStats();
+        stats.add(ModStats.thrust, thrust, StatUnit.none);
+        stats.add(ModStats.shipMass, blockMass(), StatUnit.none);
     }
 }

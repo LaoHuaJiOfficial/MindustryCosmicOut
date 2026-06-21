@@ -28,5 +28,10 @@ public class LiquidLaunchPad extends LiquidLaunchPadBase {
         protected void buildDestinationConfig(Table table) {
             SectorPadDestination.addConfigButton(table, this::deselect);
         }
+
+        @Override
+        protected Object logisticsDestination() {
+            return state.isCampaign() && state.rules.sector != null ? state.rules.sector.info.destination : null;
+        }
     }
 }

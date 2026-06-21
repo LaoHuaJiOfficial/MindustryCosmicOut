@@ -1,11 +1,10 @@
 package mod.extend.type.cargopad;
 
-import arc.Core;
 import mindustry.ctype.UnlockableContent;
-import mindustry.type.Planet;
 import mod.extend.sector.PlanetLogistics;
 import mod.extend.sector.PlanetLogisticsData;
 import mod.extend.type.pad.PayloadLandingPadBase;
+import mod.extend.type.pad.PadDisplayUI;
 
 import static mindustry.Vars.*;
 
@@ -39,23 +38,8 @@ public class PlanetaryPayloadLandingPad extends PayloadLandingPadBase {
 
     @Override
     protected String buildImportSourcesLabel(UnlockableContent unlockable) {
-        int sources = 0;
-        float perSecond = 0f;
-        for (Planet planet : content.planets()) {
-            if (planet == state.getPlanet() || !PlanetLogistics.hasBase(planet)) continue;
-            PlanetLogisticsData otherData = PlanetLogistics.get(planet);
-            if (otherData.destinationPlanet() != state.getPlanet()) continue;
-            float amount = otherData.getPayloadExport(unlockable);
-            if (amount <= 0f) continue;
-            sources++;
-            perSecond += amount;
-        }
-
-        String str = Core.bundle.format("landing.sources", sources == 0 ? Core.bundle.get("none") : sources);
-        if (perSecond > 0f) {
-            str += "\n" + Core.bundle.format("landing.import", unlockable.emoji(), (int) (perSecond * 60f));
-        }
-        return str;
+        PadDisplayUI.ImportSources sources = PadDisplayUI.planetaryPayloadSources(state.getPlanet(), unlockable);
+        return PadDisplayUI.formatImportWithSectors(unlockable, sources.sectors, sources.perSecond, state.getPlanet());
     }
 
     public class PlanetaryPayloadLandingPadBuild extends PayloadLandingPadBase.PayloadLandingPadBuild {

@@ -1,6 +1,5 @@
 package mod.extend.type.cargopad;
 
-import arc.Core;
 import arc.Events;
 import arc.scene.ui.layout.Table;
 import arc.struct.ObjectMap;
@@ -11,7 +10,7 @@ import mindustry.type.Item;
 import mindustry.type.Planet;
 import mindustry.world.blocks.ItemSelection;
 import mod.extend.sector.PlanetLogistics;
-import mod.extend.sector.PlanetLogisticsData;
+import mod.extend.type.pad.PadDisplayUI;
 
 import static mindustry.Vars.*;
 
@@ -96,7 +95,7 @@ public class PlanetaryItemLandingPad extends CargoLandingPad {
             updateCooldown();
 
             if (config != null && (isFake() || (state.isCampaign() && !legacyDisabled()))) {
-                PlanetLogisticsData data = logistics();
+                var data = logistics();
                 if (cooldown <= 0f && efficiency > 0f && items.total() == 0 && !isLanding()
                         && (isFake() || (data.getItemImportRate(state.getPlanet(), config) > 0f
                         && data.itemImportTimer(config) >= 1f))) {
@@ -115,32 +114,10 @@ public class PlanetaryItemLandingPad extends CargoLandingPad {
         }
 
         @Override
-        public void display(Table table) {
-            super.display(table);
-            if (!state.isCampaign() || net.client() || team != player.team() || isFake()) return;
-
-            table.row();
-            table.label(() -> {
-                if (legacyDisabled() || config == null) return legacyDisabled() ? Core.bundle.get("landingpad.legacy.disabled") : "";
-
-                int sources = 0;
-                float perSecond = 0f;
-                for (Planet planet : content.planets()) {
-                    if (planet == state.getPlanet() || !PlanetLogistics.hasBase(planet)) continue;
-                    PlanetLogisticsData otherData = PlanetLogistics.get(planet);
-                    if (otherData.destinationPlanet() != state.getPlanet()) continue;
-                    float amount = otherData.getItemExport(config);
-                    if (amount <= 0f) continue;
-                    sources++;
-                    perSecond += amount;
-                }
-
-                String str = Core.bundle.format("landing.sources", sources == 0 ? Core.bundle.get("none") : sources);
-                if (perSecond > 0f) {
-                    str += "\n" + Core.bundle.format("landing.import", config.emoji(), (int) (perSecond * 60f));
-                }
-                return str;
-            }).pad(4).wrap().width(200f).left();
+        protected String buildImportDisplayLabel() {
+            if (config == null) return null;
+            PadDisplayUI.ImportSources sources = PadDisplayUI.planetaryItemSources(state.getPlanet(), config);
+            return PadDisplayUI.formatImportWithSectors(config, sources.sectors, sources.perSecond, state.getPlanet());
         }
     }
 }

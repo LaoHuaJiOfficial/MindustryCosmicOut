@@ -1,0 +1,9 @@
+planets: [
+  { name: sun, axis0: 0, axis120: 0 }
+  { name: erekir, axis0: 2, axis120: 0 }
+  { name: gier, axis0: 2, axis120: 3, size: 16 }
+  { name: notva, axis0: -1, axis120: 2, size: 16 }
+  { name: tantros, axis0: 3, axis120: 2 }
+  { name: serpulo, axis0: -4, axis120: 1 }
+  { name: verilus, axis0: -5, axis120: -2, size: 16 }
+]
