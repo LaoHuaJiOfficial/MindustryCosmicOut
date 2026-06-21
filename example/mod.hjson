@@ -2,7 +2,7 @@ displayName: "Cosmic Out Example"
 name: "cosmic-out-example"
 author: "LaoHuaJi"
 description: "Example JSON mod that adds Cosmic Out launch and landing pads. Requires the Cosmic Out Java mod."
-version: 1.0
+version: "1.0"
 minGameVersion: 158
 dependencies: [
   cosmic-out
